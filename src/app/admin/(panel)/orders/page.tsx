@@ -2,10 +2,10 @@ import { ClipboardList } from "lucide-react";
 import type { Metadata } from "next";
 
 import { Pagination } from "@/components/data/pagination";
-import { ParamCombobox } from "@/components/data/param-combobox";
 import { SearchInput } from "@/components/data/search-input";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
+import { CustomerFilter } from "@/features/sales/components/customer-filter";
 import { OrdersTable } from "@/features/sales/components/orders-table";
 import { listCustomerFilterOptions, listOrders, ORDER_SORTS } from "@/features/sales/queries";
 import { intParam, pageParam, param, sortParam } from "@/lib/search-params";
@@ -38,20 +38,7 @@ export default async function AllOrdersPage({ searchParams }: PageProps<"/admin/
       <PageHeader title="ყველა შეკვეთა" description="ყველა მაღაზიის ღია შეკვეთები ერთ სიაში." />
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <SearchInput className="sm:w-72" placeholder="კლიენტი, მისამართი, კომენტარი ან №…" />
-        <ParamCombobox
-          param="customer"
-          value={customerId ? String(customerId) : undefined}
-          label="კლიენტი"
-          placeholder="კლიენტის ძებნა…"
-          emptyText="კლიენტი ვერ მოიძებნა."
-          className="w-72 sm:ml-auto"
-          options={customerOptions.map((c) => ({
-            value: String(c.id),
-            label: c.name,
-            hint: [c.storeName, c.address].filter(Boolean).join(" · "),
-            muted: c.isArchived,
-          }))}
-        />
+        <CustomerFilter options={customerOptions} value={customerId} className="w-72 sm:ml-auto" withStore />
       </div>
       {list.rows.length === 0 ? (
         <EmptyState icon={ClipboardList} title="ღია შეკვეთები არ არის" />

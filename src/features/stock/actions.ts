@@ -5,27 +5,23 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { storeHref } from "@/lib/routes";
-import { amount, formObject, id, requiredText, text, wholeNumber } from "@/lib/validation";
-import { ActionError, type ActionResult, fieldErrorsFrom, runAction } from "@/server/action";
+import { amount, checkbox, formObject, id, requestId, requiredText, text, wholeNumber } from "@/lib/validation";
+import { type ActionResult, parseInput, runAction } from "@/server/action";
 import { authorizeStore } from "@/server/auth/dal";
 import { db } from "@/server/db";
+import { once } from "@/server/db/once";
 
 import { createSupplier, deleteSupplier, setSupplierArchived, updateSupplier } from "../catalog/service";
 import { paySupplier } from "../finance/service";
 import { createReceipt, deleteReceipt } from "./service";
 
-function parse<T extends z.ZodType>(schema: T, input: unknown): z.output<T> {
-  const parsed = schema.safeParse(input);
-  if (!parsed.success) throw new ActionError("შეასწორეთ მონიშნული ველები.", fieldErrorsFrom(parsed.error));
-  return parsed.data;
-}
-
 // ── Stock receipts ──────────────────────────────────────────────────────────
 
 const receiptSchema = z.object({
+  requestId,
   supplierId: id.nullable(),
   lines: z
-    .array(z.object({ productId: id, quantity: wholeNumber({ allowNegative: true }), unitCost: amount() }))
+    .array(z.object({ productId: id, quantity: wholeNumber({ allowNegative: true }), unitCost: amount({ required: true }) }))
     .max(2000),
   comment: text(2000),
 });
@@ -34,8 +30,10 @@ export type ReceiptPayload = z.input<typeof receiptSchema>;
 export async function createReceiptAction(storeId: number, payload: ReceiptPayload) {
   return runAction(async () => {
     const { actor } = await authorizeStore(storeId);
-    const data = parse(receiptSchema, payload);
-    const created = await db.transaction((tx) => createReceipt(tx, actor, data));
+    const data = parseInput(receiptSchema, payload);
+    const created = await once(db, { key: data.requestId, action: "receipt.create", userId: actor.userId }, (tx) =>
+      createReceipt(tx, actor, data),
+    );
     redirect(`${storeHref(storeId, `stock/${created.id}`)}?created=1`);
   });
 }
@@ -52,16 +50,13 @@ export async function deleteReceiptAction(storeId: number, receiptId: number) {
 
 const supplierSchema = z.object({
   name: requiredText("დასახელება", 200),
-  isReturns: z
-    .string()
-    .optional()
-    .transform((v) => v === "on" || v === "true"),
+  isReturns: checkbox(),
 });
 
 export async function createSupplierAction(storeId: number, _prev: unknown, formData: FormData): Promise<ActionResult> {
   return runAction(async () => {
     const { actor } = await authorizeStore(storeId);
-    const data = parse(supplierSchema, formObject(formData));
+    const data = parseInput(supplierSchema, formObject(formData));
     const row = await db.transaction((tx) => createSupplier(tx, actor, data));
     redirect(storeHref(storeId, `suppliers/${row.id}`));
   });
@@ -75,7 +70,7 @@ export async function updateSupplierAction(
 ): Promise<ActionResult> {
   return runAction(async () => {
     const { actor } = await authorizeStore(storeId);
-    const data = parse(supplierSchema, formObject(formData));
+    const data = parseInput(supplierSchema, formObject(formData));
     await db.transaction((tx) => updateSupplier(tx, actor, supplierId, data));
     redirect(storeHref(storeId, `suppliers/${supplierId}`));
   });
@@ -85,10 +80,11 @@ export async function setSupplierArchivedAction(storeId: number, supplierId: num
   return runAction(
     async () => {
       const { actor } = await authorizeStore(storeId);
-      await db.transaction((tx) => setSupplierArchived(tx, actor, supplierId, archived));
+      const value = parseInput(z.boolean(), archived);
+      await db.transaction((tx) => setSupplierArchived(tx, actor, supplierId, value));
       refresh();
     },
-    archived ? "მომწოდებელი გადავიდა სანაგვეში" : "მომწოდებელი აღდგა",
+    archived === true ? "მომწოდებელი გადავიდა სანაგვეში" : "მომწოდებელი აღდგა",
   );
 }
 
@@ -100,13 +96,15 @@ export async function deleteSupplierAction(storeId: number, supplierId: number) 
   });
 }
 
-const paySchema = z.object({ amount: amount({ required: true }), note: text(500) });
+const paySchema = z.object({ requestId, amount: amount({ required: true }), note: text(500) });
 
 export async function paySupplierAction(storeId: number, supplierId: number, input: z.input<typeof paySchema>) {
   return runAction(async () => {
     const { actor } = await authorizeStore(storeId);
-    const data = parse(paySchema, input);
-    await db.transaction((tx) => paySupplier(tx, actor, { supplierId, ...data }));
+    const data = parseInput(paySchema, input);
+    await once(db, { key: data.requestId, action: "supplier.pay", userId: actor.userId }, (tx) =>
+      paySupplier(tx, actor, { supplierId, amount: data.amount, note: data.note }),
+    );
     refresh();
-  }, "გადახდა ჩაიწერა");
+  }, "გადახდა ჩაიწერა სალაროში");
 }

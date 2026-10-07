@@ -34,4 +34,3 @@ export async function burnPasswordCheck(password: string): Promise<void> {
   await bcrypt.compare(password, await dummyHash);
 }
 
-export const PASSWORD_MIN_LENGTH = 8;

@@ -1,7 +1,7 @@
 "use client";
 
 import { Boxes, CornerDownLeft, Truck, UserRound } from "lucide-react";
-import { useParams, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 
 import {
@@ -18,6 +18,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { type SearchHit, searchStoreAction } from "@/features/search/actions";
 
 import { COMMAND_PALETTE_EVENT } from "./command-palette-events";
+import { useCurrentStoreId } from "./use-current-store";
 import { GLOBAL_NAV, STORE_NAV, storeHref } from "./nav";
 
 const HIT_ICON = { customer: UserRound, product: Boxes, supplier: Truck } as const;
@@ -26,8 +27,7 @@ const HIT_GROUP = { customer: "კლიენტები", product: "პრო
 
 export function CommandPalette() {
   const router = useRouter();
-  const params = useParams<{ storeId?: string }>();
-  const storeId = params.storeId ? Number(params.storeId) : null;
+  const storeId = useCurrentStoreId();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [hits, setHits] = useState<SearchHit[]>([]);

@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { SortableHead } from "@/components/data/sortable-head";
+import { HeadRow, TableCard } from "@/components/data/table-card";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -42,10 +43,10 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/sett
           </Button>
         }
       />
-      <div className="overflow-hidden rounded-xl border bg-card">
+      <TableCard>
         <Table>
           <TableHeader>
-            <TableRow className="bg-muted/40 hover:bg-muted/40">
+            <HeadRow>
               <SortableHead column="user">მომხმარებელი</SortableHead>
               <SortableHead column="role">როლი</SortableHead>
               <SortableHead column="stores" first="desc" className="hidden md:table-cell">
@@ -54,7 +55,7 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/sett
               <SortableHead column="login" className="hidden text-right lg:table-cell">
                 ბოლო შესვლა
               </SortableHead>
-            </TableRow>
+            </HeadRow>
           </TableHeader>
           <TableBody>
             {users.map((u) => (
@@ -101,7 +102,7 @@ export default async function UsersPage({ searchParams }: PageProps<"/admin/sett
             ))}
           </TableBody>
         </Table>
-      </div>
+      </TableCard>
     </>
   );
 }

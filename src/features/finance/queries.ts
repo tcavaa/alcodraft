@@ -4,6 +4,8 @@ import { and, asc, count, desc, eq, gte, ilike, lte, or, sql, type SQL } from "d
 
 import type { SortState } from "@/lib/sort";
 import { db } from "@/server/db";
+import { countByArchived } from "@/server/db/archived";
+import { cashDelta, cashSumOrZero, likePattern } from "@/server/db/expressions";
 import { by } from "@/server/db/order";
 import {
   deliveries,
@@ -15,8 +17,6 @@ import {
   wageAccruals,
 } from "@/server/db/schema";
 
-const likeEscape = (q: string) => `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
-const balanceExpr = sql<string>`coalesce(sum(${financeEntries.amountIn} - ${financeEntries.amountOut} + ${financeEntries.adjustmentAmount}), 0)`;
 
 export async function listAccounts(storeId: number) {
   return db
@@ -25,7 +25,7 @@ export async function listAccounts(storeId: number) {
       name: financeAccounts.name,
       isDefault: financeAccounts.isDefault,
       isArchived: financeAccounts.isArchived,
-      balance: balanceExpr,
+      balance: cashSumOrZero,
       entries: sql<number>`count(${financeEntries.id})::int`,
     })
     .from(financeAccounts)
@@ -65,7 +65,7 @@ export async function listEntries(accountId: number, p: EntryListParams) {
       employeeId: financeEntries.employeeId,
       createdById: financeEntries.createdById,
       balanceAfter:
-        sql<string>`sum(${financeEntries.amountIn} - ${financeEntries.amountOut} + ${financeEntries.adjustmentAmount}) over (order by ${financeEntries.id})`.as(
+        sql<string>`sum(${cashDelta}) over (order by ${financeEntries.id})`.as(
           "balance_after",
         ),
     })
@@ -75,7 +75,7 @@ export async function listEntries(accountId: number, p: EntryListParams) {
 
   const conditions: (SQL | undefined)[] = [];
   if (p.q) {
-    const like = likeEscape(p.q);
+    const like = likePattern(p.q);
     conditions.push(or(ilike(running.description, like), ilike(running.note, like)));
   }
   if (p.from) conditions.push(gte(running.date, p.from));
@@ -184,14 +184,7 @@ export async function listEmployees(storeId: number, archived: boolean) {
     .orderBy(asc(employees.name));
 }
 
-export async function countEmployees(storeId: number) {
-  const rows = await db
-    .select({ archived: employees.isArchived, n: count() })
-    .from(employees)
-    .where(eq(employees.storeId, storeId))
-    .groupBy(employees.isArchived);
-  return { active: rows.find((r) => !r.archived)?.n ?? 0, archived: rows.find((r) => r.archived)?.n ?? 0 };
-}
+export const countEmployees = (storeId: number) => countByArchived(employees, storeId);
 
 /** Old employees/historywages: unpaid balance, wages added, payments made. */
 export async function getEmployee(storeId: number, employeeId: number) {

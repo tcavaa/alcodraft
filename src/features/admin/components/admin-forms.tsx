@@ -1,8 +1,7 @@
 "use client";
 
 import { KeyRound, Shuffle, Trash2 } from "lucide-react";
-import { useActionState, useState, useTransition } from "react";
-import { toast } from "sonner";
+import { useState } from "react";
 
 import { ConfirmAction } from "@/components/confirm-action";
 import { FormError, TextField } from "@/components/forms/fields";
@@ -23,7 +22,10 @@ import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
+import { useActionForm } from "@/hooks/use-action-form";
+import { useServerAction } from "@/hooks/use-server-action";
 import type { ActionResult } from "@/lib/action-result";
+import { PASSWORD_MIN } from "@/lib/policy";
 
 import { deleteStoreAction, deleteUserAction, resetPasswordAction } from "../actions";
 
@@ -49,12 +51,11 @@ export function StoreForm({
   submitLabel: string;
   showAdvanced: boolean;
 }) {
-  const [state, formAction] = useActionState(action, undefined);
-  const errors = state && !state.ok ? state.fieldErrors : undefined;
+  const form = useActionForm(action);
   return (
-    <form action={formAction} className="space-y-6">
+    <form onSubmit={form.onSubmit} className="space-y-6">
       <FieldGroup>
-        <TextField label="დასახელება" name="name" defaultValue={defaults?.name} error={errors?.name} required autoFocus />
+        <TextField label="დასახელება" name="name" defaultValue={defaults?.name} error={form.errors?.name} required autoFocus />
         {showAdvanced ? (
           <>
             <TextField
@@ -63,7 +64,7 @@ export function StoreForm({
               type="number"
               min={0}
               defaultValue={defaults?.sortOrder ?? 0}
-              error={errors?.sortOrder}
+              error={form.errors?.sortOrder}
               description="მენიუში რიგითობა (პატარა რიცხვი — ზემოთ)."
             />
             <Field orientation="horizontal">
@@ -76,9 +77,11 @@ export function StoreForm({
           </>
         ) : null}
       </FieldGroup>
-      <FormError message={state && !state.ok && !errors ? state.error : undefined} />
+      <FormError message={form.formError} />
       <div className="flex justify-end">
-        <SubmitButton size="lg">{submitLabel}</SubmitButton>
+        <SubmitButton size="lg" pending={form.pending}>
+          {submitLabel}
+        </SubmitButton>
       </div>
     </form>
   );
@@ -119,13 +122,15 @@ export function UserForm({
   isCreate: boolean;
   isSelf?: boolean;
 }) {
-  const [state, formAction] = useActionState(action, undefined);
-  const errors = state && !state.ok ? state.fieldErrors : undefined;
+  // Submitted without React's automatic form reset: after a save the checkboxes, switch and role
+  // keep showing what was saved (a reset used to bring back the old access and save it again).
+  const form = useActionForm(action);
+  const errors = form.errors;
   const [role, setRole] = useState<"super_admin" | "user">(defaults?.role ?? "user");
   const [password, setPassword] = useState("");
 
   return (
-    <form action={formAction} className="space-y-6">
+    <form onSubmit={form.onSubmit} className="space-y-6">
       <FieldGroup className="grid gap-5 sm:grid-cols-2">
         <TextField label="ელფოსტა" name="email" type="email" defaultValue={defaults?.email} error={errors?.email} required autoComplete="off" />
         <TextField label="სახელი" name="name" defaultValue={defaults?.name} error={errors?.name} placeholder="მაგ.: ნიკა" />
@@ -141,14 +146,16 @@ export function UserForm({
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                minLength={8}
+                minLength={PASSWORD_MIN}
               />
               <Button type="button" variant="outline" onClick={() => setPassword(generatePassword())}>
                 <Shuffle />
                 გენერაცია
               </Button>
             </div>
-            <FieldDescription>მინიმუმ 8 სიმბოლო. გადაეცით მომხმარებელს — შეცვლა შეუძლია „ჩემი ანგარიშიდან“.</FieldDescription>
+            <FieldDescription>
+              მინიმუმ {PASSWORD_MIN} სიმბოლო. გადაეცით მომხმარებელს — შეცვლა შეუძლია „ჩემი ანგარიშიდან“.
+            </FieldDescription>
             {errors?.password ? <p className="text-sm text-destructive">{errors.password}</p> : null}
           </Field>
         ) : null}
@@ -204,9 +211,11 @@ export function UserForm({
         {isSelf ? <input type="hidden" name="isActive" value="on" /> : null}
       </Field>
 
-      <FormError message={state && !state.ok && !errors ? state.error : undefined} />
+      <FormError message={form.formError} />
       <div className="flex justify-end">
-        <SubmitButton size="lg">{submitLabel}</SubmitButton>
+        <SubmitButton size="lg" pending={form.pending}>
+          {submitLabel}
+        </SubmitButton>
       </div>
     </form>
   );
@@ -215,17 +224,8 @@ export function UserForm({
 export function ResetPasswordDialog({ userId, email }: { userId: number; email: string }) {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState("");
-  const [pending, startTransition] = useTransition();
-  const submit = () =>
-    startTransition(async () => {
-      const result = await resetPasswordAction(userId, value);
-      if (!result.ok) {
-        toast.error(result.fieldErrors?._ ?? result.error);
-        return;
-      }
-      toast.success(result.message ?? "პაროლი შეიცვალა");
-      setOpen(false);
-    });
+  const { run, pending } = useServerAction();
+  const submit = () => run(() => resetPasswordAction(userId, value), { onSuccess: () => setOpen(false) });
   return (
     <Dialog
       open={open}
@@ -247,7 +247,7 @@ export function ResetPasswordDialog({ userId, email }: { userId: number; email: 
           <DialogDescription>მომხმარებელი გამოვა ყველა მოწყობილობიდან. ახალი პაროლი გადაეცით პირადად.</DialogDescription>
         </DialogHeader>
         <div className="flex gap-2">
-          <Input value={value} onChange={(e) => setValue(e.target.value)} className="font-mono" />
+          <Input value={value} onChange={(e) => setValue(e.target.value)} className="font-mono" aria-label="ახალი პაროლი" />
           <Button type="button" variant="outline" size="icon" onClick={() => setValue(generatePassword())} aria-label="გენერაცია">
             <Shuffle />
           </Button>
@@ -256,7 +256,7 @@ export function ResetPasswordDialog({ userId, email }: { userId: number; email: 
           <Button variant="outline" onClick={() => setOpen(false)} disabled={pending}>
             გაუქმება
           </Button>
-          <Button onClick={submit} disabled={pending || value.length < 8}>
+          <Button onClick={submit} disabled={pending || value.length < PASSWORD_MIN}>
             {pending ? <Spinner /> : null}
             შენახვა
           </Button>

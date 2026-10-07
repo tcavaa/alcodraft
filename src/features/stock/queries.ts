@@ -1,13 +1,13 @@
 import "server-only";
 
-import { and, asc, count, desc, eq, gte, ilike, lte, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, ilike, lte, ne, or, sql, type SQL } from "drizzle-orm";
 
 import type { SortState } from "@/lib/sort";
 import { db } from "@/server/db";
+import { countByArchived } from "@/server/db/archived";
+import { likePattern, supplierPaidSum } from "@/server/db/expressions";
 import { by } from "@/server/db/order";
 import { financeEntries, products, stockReceiptItems, stockReceipts, suppliers, users } from "@/server/db/schema";
-
-const likeEscape = (q: string) => `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 
 const receiptTotalsQuery = () =>
   db
@@ -43,7 +43,7 @@ export async function listReceipts(
   if (p.from) conditions.push(gte(stockReceipts.receiptDate, p.from));
   if (p.to) conditions.push(lte(stockReceipts.receiptDate, p.to));
   if (p.q) {
-    const like = likeEscape(p.q);
+    const like = likePattern(p.q);
     conditions.push(or(ilike(stockReceipts.comment, like), ilike(suppliers.name, like), sql`${stockReceipts.number}::text = ${p.q}`));
   }
   const where = and(...conditions);
@@ -162,7 +162,7 @@ const supplierPaidQuery = () =>
   db
   .select({
     supplierId: financeEntries.supplierId,
-    paid: sql<string>`sum(${financeEntries.amountOut})`.as("paid"),
+    paid: supplierPaidSum.as("paid"),
   })
   .from(financeEntries)
   .groupBy(financeEntries.supplierId)
@@ -189,16 +189,12 @@ export async function listSuppliers(storeId: number, archived: boolean) {
     .orderBy(asc(suppliers.name));
 }
 
-export async function countSuppliers(storeId: number) {
-  const rows = await db
-    .select({ archived: suppliers.isArchived, n: count() })
-    .from(suppliers)
-    .where(eq(suppliers.storeId, storeId))
-    .groupBy(suppliers.isArchived);
-  return { active: rows.find((r) => !r.archived)?.n ?? 0, archived: rows.find((r) => r.archived)?.n ?? 0 };
-}
+export const countSuppliers = (storeId: number) => countByArchived(suppliers, storeId);
 
-/** Old drinks/historylistmomw: receipts to pay for, payments made, what is left. */
+/**
+ * Old drinks/historylistmomw: receipts to pay for, payments made, what is left. "Paid" is the same
+ * Σ cash-book expenses as on the supplier list; income rows linked to the supplier don't count.
+ */
 export async function getSupplier(storeId: number, supplierId: number) {
   const [supplier] = await db
     .select()
@@ -206,7 +202,7 @@ export async function getSupplier(storeId: number, supplierId: number) {
     .where(and(eq(suppliers.id, supplierId), eq(suppliers.storeId, storeId)));
   if (!supplier) return null;
   const receiptTotals = receiptTotalsQuery();
-  const [receipts, payments] = await Promise.all([
+  const [receipts, payments, [totals]] = await Promise.all([
     db
       .select({
         id: stockReceipts.id,
@@ -225,12 +221,12 @@ export async function getSupplier(storeId: number, supplierId: number) {
         id: financeEntries.id,
         date: financeEntries.entryDate,
         amountOut: financeEntries.amountOut,
-        amountIn: financeEntries.amountIn,
         note: financeEntries.note,
       })
       .from(financeEntries)
-      .where(eq(financeEntries.supplierId, supplierId))
+      .where(and(eq(financeEntries.supplierId, supplierId), ne(financeEntries.amountOut, "0")))
       .orderBy(desc(financeEntries.id)),
+    db.select({ paid: supplierPaidSum }).from(financeEntries).where(eq(financeEntries.supplierId, supplierId)),
   ]);
-  return { supplier, receipts, payments };
+  return { supplier, receipts, payments, paid: totals.paid };
 }

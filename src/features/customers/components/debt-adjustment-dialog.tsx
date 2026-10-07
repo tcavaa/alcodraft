@@ -1,8 +1,7 @@
 "use client";
 
 import { Scale } from "lucide-react";
-import { useState, useTransition } from "react";
-import { toast } from "sonner";
+import { useState } from "react";
 
 import { Money } from "@/components/money";
 import { Button } from "@/components/ui/button";
@@ -21,6 +20,8 @@ import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { adjustDebtAction } from "@/features/sales/actions";
+import { useRequestId } from "@/hooks/use-request-id";
+import { useServerAction } from "@/hooks/use-server-action";
 import { dec, parseAmount } from "@/lib/money";
 
 /**
@@ -40,31 +41,31 @@ export function DebtAdjustmentDialog({
   const [direction, setDirection] = useState<"decrease" | "increase">("decrease");
   const [value, setValue] = useState("");
   const [comment, setComment] = useState("");
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [pending, startTransition] = useTransition();
+  const requestId = useRequestId();
+  const { run, pending, errors, setErrors } = useServerAction();
 
   const parsed = parseAmount(value);
   const signed = parsed ? (direction === "decrease" ? parsed.negated() : parsed) : null;
   const after = signed ? dec(currentDebt).plus(signed) : null;
 
-  const submit = () =>
-    startTransition(async () => {
-      if (!signed || signed.isZero()) {
-        setErrors({ amount: "შეიყვანეთ თანხა" });
-        return;
-      }
-      const result = await adjustDebtAction(storeId, { customerId, amount: signed.toString(), comment });
-      if (!result.ok) {
-        setErrors(result.fieldErrors ?? {});
-        toast.error(result.error);
-        return;
-      }
-      toast.success("ვალი დაკორექტირდა");
-      setOpen(false);
-      setValue("");
-      setComment("");
-      setErrors({});
-    });
+  const submit = () => {
+    if (!signed || signed.isZero()) {
+      setErrors({ amount: "შეიყვანეთ თანხა" });
+      return;
+    }
+    run(
+      () =>
+        adjustDebtAction(storeId, { customerId, amount: signed.toString(), comment, requestId: requestId.current() }),
+      {
+        onSuccess: () => {
+          requestId.renew();
+          setOpen(false);
+          setValue("");
+          setComment("");
+        },
+      },
+    );
+  };
 
   return (
     <Dialog open={open} onOpenChange={(o) => !pending && setOpen(o)}>

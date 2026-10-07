@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 
 import { FilterTabs } from "@/components/data/filter-tabs";
 import { SortableHead } from "@/components/data/sortable-head";
+import { HeadRow, TableCard } from "@/components/data/table-card";
 import { Money } from "@/components/money";
 import { PageHeader } from "@/components/page-header";
 import { Table, TableBody, TableCell, TableFooter, TableHeader, TableRow } from "@/components/ui/table";
@@ -53,10 +54,10 @@ export default async function MonthlyPage({ params, searchParams }: PageProps<"/
           />
         </div>
       ) : null}
-      <div className="overflow-hidden rounded-xl border bg-card">
+      <TableCard>
         <Table>
           <TableHeader>
-            <TableRow className="bg-muted/40 hover:bg-muted/40">
+            <HeadRow>
               <SortableHead column="month" first="desc">
                 თარიღი (თვე)
               </SortableHead>
@@ -69,7 +70,7 @@ export default async function MonthlyPage({ params, searchParams }: PageProps<"/
               <SortableHead column="net" className="text-right">
                 შემოსავალი − ხარჯი
               </SortableHead>
-            </TableRow>
+            </HeadRow>
           </TableHeader>
           <TableBody>
             {rows.map((r) => {
@@ -108,7 +109,7 @@ export default async function MonthlyPage({ params, searchParams }: PageProps<"/
             </TableRow>
           </TableFooter>
         </Table>
-      </div>
+      </TableCard>
     </>
   );
 }

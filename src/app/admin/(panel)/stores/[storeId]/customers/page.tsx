@@ -2,11 +2,12 @@ import { Palette, Plus, Users } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { FilterTabs } from "@/components/data/filter-tabs";
+import { ArchivedTabs } from "@/components/data/archived-tabs";
 import { Pagination } from "@/components/data/pagination";
 import { ParamSelect } from "@/components/data/param-select";
 import { SearchInput } from "@/components/data/search-input";
 import { SortableHead } from "@/components/data/sortable-head";
+import { HeadRow, TableCard } from "@/components/data/table-card";
 import { EmptyState } from "@/components/empty-state";
 import { Money } from "@/components/money";
 import { PageHeader } from "@/components/page-header";
@@ -17,8 +18,9 @@ import { CustomerComment } from "@/features/customers/components/customer-commen
 import { CustomerRowMenu } from "@/features/customers/components/customer-row-menu";
 import { countCustomers, CUSTOMER_SORTS, listCustomers } from "@/features/customers/queries";
 import { formatDate } from "@/lib/dates";
+import { dec, formatQty } from "@/lib/money";
 import { storeHref } from "@/lib/routes";
-import { pageParam, param, sortParam } from "@/lib/search-params";
+import { enumParam, pageParam, param, sortParam } from "@/lib/search-params";
 import { cn } from "@/lib/utils";
 import { requireStore } from "@/server/auth/dal";
 
@@ -32,8 +34,7 @@ export default async function CustomersPage({ params, searchParams }: PageProps<
   const sp = await searchParams;
   const archived = param(sp, "archived") === "1";
   const sort = sortParam(sp, CUSTOMER_SORTS);
-  const colorParam = param(sp, "color");
-  const color = colorParam === "green" || colorParam === "yellow" || colorParam === "red" ? colorParam : undefined;
+  const color = enumParam(sp, "color", ["green", "yellow", "red"] as const);
   const page = pageParam(sp);
   const q = param(sp, "q");
 
@@ -62,16 +63,7 @@ export default async function CustomersPage({ params, searchParams }: PageProps<
       <div className="mb-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <SearchInput placeholder="სახელი, მისამართი, ტელეფონი, ს/ნ…" />
-          <FilterTabs
-            pathname={pathname}
-            searchParams={sp}
-            param="archived"
-            value={archived ? "1" : "0"}
-            options={[
-              { value: "0", label: "აქტიური", count: counts.active },
-              { value: "1", label: "სანაგვე", count: counts.archived },
-            ]}
-          />
+          <ArchivedTabs pathname={pathname} searchParams={sp} archived={archived} counts={counts} />
         </div>
         <ParamSelect
           param="color"
@@ -94,10 +86,10 @@ export default async function CustomersPage({ params, searchParams }: PageProps<
           description={q ? `"${q}" — სხვა სიტყვით სცადეთ.` : undefined}
         />
       ) : (
-        <div className="overflow-hidden rounded-xl border bg-card">
+        <TableCard>
           <Table>
             <TableHeader>
-              <TableRow className="bg-muted/40 hover:bg-muted/40">
+              <HeadRow>
                 <SortableHead column="color" first="asc" className="w-14 pr-0">
                   <Palette className="size-3.5" aria-label="ფერი" />
                 </SortableHead>
@@ -112,7 +104,7 @@ export default async function CustomersPage({ params, searchParams }: PageProps<
                   ბოლო ოპერაცია
                 </SortableHead>
                 <TableHead className="w-10" />
-              </TableRow>
+              </HeadRow>
             </TableHeader>
             <TableBody>
               {list.rows.map((c) => (
@@ -155,8 +147,8 @@ export default async function CustomersPage({ params, searchParams }: PageProps<
               <TableRow className="hover:bg-transparent">
                 <TableCell />
                 <TableCell colSpan={2} className="text-muted-foreground">
-                  სულ {list.total} კლიენტი
-                  {Number(list.credit) !== 0 ? (
+                  სულ {formatQty(list.total)} კლიენტი
+                  {!dec(list.credit).isZero() ? (
                     <>
                       {" "}
                       · ზედმეტად გადახდილი <Money value={list.credit} currency />
@@ -170,7 +162,7 @@ export default async function CustomersPage({ params, searchParams }: PageProps<
               </TableRow>
             </TableFooter>
           </Table>
-        </div>
+        </TableCard>
       )}
       <Pagination page={page} pageSize={PAGE_SIZE} total={list.total} pathname={pathname} searchParams={sp} />
     </>

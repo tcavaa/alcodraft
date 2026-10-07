@@ -4,6 +4,7 @@ import { and, asc, eq, ilike, or } from "drizzle-orm";
 
 import { getMyStores, requireUser } from "@/server/auth/dal";
 import { db } from "@/server/db";
+import { likePattern } from "@/server/db/expressions";
 import { customers, products, suppliers } from "@/server/db/schema";
 
 export interface SearchHit {
@@ -20,7 +21,7 @@ export async function searchStoreAction(storeId: number, query: string): Promise
   const store = (await getMyStores()).find((s) => s.id === storeId);
   const q = query.trim();
   if (!store || q.length < 2) return [];
-  const pattern = `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+  const pattern = likePattern(q);
 
   const [c, p, s] = await Promise.all([
     db

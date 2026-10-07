@@ -1,6 +1,7 @@
 import Link from "next/link";
 
 import { SortableHead } from "@/components/data/sortable-head";
+import { HeadRow, TableCard } from "@/components/data/table-card";
 import { Money } from "@/components/money";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableFooter, TableHeader, TableRow } from "@/components/ui/table";
@@ -45,10 +46,10 @@ export function OrdersTable({
   showStore: boolean;
 }) {
   return (
-    <div className="overflow-hidden rounded-xl border bg-card [&_td]:px-1.5 [&_th]:px-1.5 [&_tr>*:first-child]:pl-3 [&_tr>*:last-child]:pr-3">
+    <TableCard className="[&_td]:px-1.5 [&_th]:px-1.5 [&_tr>*:first-child]:pl-3 [&_tr>*:last-child]:pr-3">
       <Table>
         <TableHeader>
-          <TableRow className="bg-muted/40 hover:bg-muted/40">
+          <HeadRow>
             <SortableHead column="date" first="desc">
               თარიღი
             </SortableHead>
@@ -69,7 +70,7 @@ export function OrdersTable({
             <SortableHead column="waybill" first="desc" className="hidden text-center sm:table-cell">
               RS
             </SortableHead>
-          </TableRow>
+          </HeadRow>
         </TableHeader>
         <TableBody>
           {rows.map((o) => {
@@ -122,7 +123,7 @@ export function OrdersTable({
                   <UploadStatusToggle storeId={o.storeId} orderId={o.id} status={o.uploadStatus} />
                 </TableCell>
                 <TableCell className="hidden text-center sm:table-cell">
-                  {o.hasWaybill === null ? "—" : o.hasWaybill ? <span className="font-medium">yes</span> : <span className="text-muted-foreground">no</span>}
+                  {o.hasWaybill === null ? "—" : o.hasWaybill ? <span className="font-medium">კი</span> : <span className="text-muted-foreground">არა</span>}
                 </TableCell>
               </TableRow>
             );
@@ -144,6 +145,6 @@ export function OrdersTable({
           </TableRow>
         </TableFooter>
       </Table>
-    </div>
+    </TableCard>
   );
 }

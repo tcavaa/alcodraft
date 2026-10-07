@@ -26,12 +26,13 @@ export function toDb(value: Numeric): string {
 }
 
 /**
- * Parse what a person typed. Accepts "1234.5", "1234,5", "1 234,50" and a leading minus.
+ * Parse what a person typed. Accepts "1234.5", "1234,5", "1 234,50" and a leading minus ("-" or "−").
  * Returns null for anything that is not a plain number — unlike the old PHP app,
  * which silently read "1072,3" as 1072 and "30 ბენზინი" as 30.
  */
-export function parseAmount(raw: string): Decimal | null {
-  const cleaned = raw.trim().replace(/[\s  ]+/g, "").replace(",", ".");
+export function parseAmount(raw: string | undefined): Decimal | null {
+  // "−" (U+2212) is the minus formatAmount displays, so a copied amount can be pasted back.
+  const cleaned = (raw ?? "").trim().replace("\u2212", "-").replace(/[\s  ]+/g, "").replace(",", ".");
   if (!/^-?(\d+(\.\d*)?|\.\d+)$/.test(cleaned)) return null;
   return new D(cleaned);
 }

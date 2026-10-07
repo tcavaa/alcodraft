@@ -37,8 +37,11 @@ export function ParamSelect({
   return (
     <Select value={value} onValueChange={onChange}>
       <SelectTrigger className={cn("h-9 bg-card", pending && "opacity-70", className)} aria-label={label}>
-        {label ? <span className="text-muted-foreground">{label}:</span> : null}
-        <SelectValue>{options.find((o) => o.value === value)?.label}</SelectValue>
+        {/* Label and value stay together on the left; the trigger pushes only the chevron right. */}
+        <span className="flex min-w-0 items-center gap-1.5">
+          {label ? <span className="shrink-0 text-muted-foreground">{label}:</span> : null}
+          <SelectValue className="truncate">{options.find((o) => o.value === value)?.label}</SelectValue>
+        </span>
       </SelectTrigger>
       <SelectContent>
         {options.map((o) => (

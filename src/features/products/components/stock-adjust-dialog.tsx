@@ -1,8 +1,8 @@
 "use client";
 
 import { ClipboardCheck } from "lucide-react";
-import { useState, useTransition } from "react";
-import { toast } from "sonner";
+import { useRouter } from "next/navigation";
+import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -18,6 +18,7 @@ import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
+import { useServerAction } from "@/hooks/use-server-action";
 
 import { adjustStockAction } from "../actions";
 
@@ -26,21 +27,19 @@ export function StockAdjustDialog({ storeId, productId, current }: { storeId: nu
   const [open, setOpen] = useState(false);
   const [qty, setQty] = useState(String(current));
   const [reason, setReason] = useState("");
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [pending, startTransition] = useTransition();
+  const router = useRouter();
+  const { run, pending, errors } = useServerAction();
   const parsed = /^-?\d+$/.test(qty.trim()) ? Number(qty) : null;
 
+  // `current` is what this dialog shows; the server refuses the count if stock moved since.
   const submit = () =>
-    startTransition(async () => {
-      const result = await adjustStockAction(storeId, productId, { newQty: qty, reason });
-      if (!result.ok) {
-        setErrors(result.fieldErrors ?? {});
-        toast.error(result.error);
-        return;
-      }
-      toast.success("მარაგი განახლდა");
-      setOpen(false);
-      setReason("");
+    run(() => adjustStockAction(storeId, productId, { newQty: qty, expectedQty: current, reason }), {
+      onSuccess: () => {
+        setOpen(false);
+        setReason("");
+      },
+      // Refused because stock moved meanwhile: load the current number for the next try.
+      onError: () => router.refresh(),
     });
 
   return (

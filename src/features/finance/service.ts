@@ -68,21 +68,38 @@ export async function updateEntryText(
     .where(and(eq(financeEntries.id, entryId), eq(financeEntries.storeId, actor.storeId)))
     .for("update");
   if (!entry) throw new ActionError("ჩანაწერი ვერ მოიძებნა.");
+  if (entry.description === input.description && entry.note === input.note) return;
   await tx.update(financeEntries).set(input).where(eq(financeEntries.id, entryId));
+  await audit(tx, {
+    storeId: actor.storeId,
+    userId: actor.userId,
+    action: "finance.update_text",
+    entityType: "finance_entry",
+    entityId: entryId,
+    summary: `სალაროს ჩანაწერის კომენტარი: „${entry.description}“ → „${input.description}“`,
+    details: { before: { description: entry.description, note: entry.note }, after: input },
+  });
 }
 
 /**
  * Deletes an entry. Customer payments belong to their operation (edit the
  * operation instead); deleting a wage payment gives the amount back to the
- * employee's unpaid balance.
+ * employee's unpaid balance. An imported entry that also carries an old manual
+ * balance correction keeps the correction, so later balances don't move.
  */
-export async function deleteEntry(tx: Tx, actor: Actor, entryId: number) {
+export async function deleteEntry(tx: Tx, actor: Actor, entryId: number, expected: "entry" | "correction") {
   const [entry] = await tx
     .select()
     .from(financeEntries)
     .where(and(eq(financeEntries.id, entryId), eq(financeEntries.storeId, actor.storeId)))
     .for("update");
   if (!entry) throw new ActionError("ჩანაწერი ვერ მოიძებნა.");
+  const hasAmounts = !dec(entry.amountIn).isZero() || !dec(entry.amountOut).isZero();
+  // `expected` is what the person confirmed; a second delete of a kept correction (another tab)
+  // must not remove it.
+  if ((hasAmounts ? "entry" : "correction") !== expected) {
+    throw new ActionError("ჩანაწერი ამასობაში შეიცვალა — განაახლეთ გვერდი.");
+  }
   if (entry.deliveryId) throw new ActionError("ეს ჩანაწერი ოპერაციას ეკუთვნის — შეცვალეთ ან წაშალეთ ოპერაცია.");
   if (entry.kind === "wage_payment" && entry.employeeId) {
     await tx
@@ -90,15 +107,32 @@ export async function deleteEntry(tx: Tx, actor: Actor, entryId: number) {
       .set({ wageBalance: sql`${employees.wageBalance} + ${toDb(dec(entry.amountOut).minus(entry.amountIn))}` })
       .where(eq(employees.id, entry.employeeId));
   }
-  await tx.delete(financeEntries).where(eq(financeEntries.id, entryId));
+  const keptCorrection = hasAmounts && !dec(entry.adjustmentAmount).isZero();
+  if (keptCorrection) {
+    await tx
+      .update(financeEntries)
+      .set({
+        kind: "manual",
+        amountIn: "0",
+        amountOut: "0",
+        supplierId: null,
+        employeeId: null,
+        description: `ძველი სისტემის კორექტირება (წაშლილი ჩანაწერიდან: ${entry.description})`,
+      })
+      .where(eq(financeEntries.id, entryId));
+  } else {
+    await tx.delete(financeEntries).where(eq(financeEntries.id, entryId));
+  }
   await audit(tx, {
     storeId: actor.storeId,
     userId: actor.userId,
     action: "finance.delete",
     entityType: "finance_entry",
     entityId: entryId,
-    summary: `წაიშალა სალაროს ჩანაწერი: ${entry.description} (+${formatAmount(entry.amountIn)} / −${formatAmount(entry.amountOut)} ₾)`,
-    details: entry,
+    summary: `წაიშალა სალაროს ჩანაწერი: ${entry.description} (+${formatAmount(entry.amountIn)} / −${formatAmount(entry.amountOut)} ₾)${
+      keptCorrection ? `, კორექტირება ${formatAmount(entry.adjustmentAmount)} ₾ დარჩა` : ""
+    }`,
+    details: { entry, keptCorrection },
   });
 }
 
@@ -125,8 +159,17 @@ export async function createAccount(tx: Tx, actor: Actor, name: string) {
 }
 
 export async function renameAccount(tx: Tx, actor: Actor, accountId: number, name: string) {
-  await requireAccount(tx, actor, accountId);
+  const account = await requireAccount(tx, actor, accountId);
+  if (account.name === name) return;
   await tx.update(financeAccounts).set({ name }).where(eq(financeAccounts.id, accountId));
+  await audit(tx, {
+    storeId: actor.storeId,
+    userId: actor.userId,
+    action: "finance.account_rename",
+    entityType: "finance_account",
+    entityId: accountId,
+    summary: `სალარო გადაერქვა: ${account.name} → ${name}`,
+  });
 }
 
 // ── Supplier payments (old drinks/historylistmomw) ──────────────────────────
@@ -196,17 +239,30 @@ export async function createEmployee(tx: Tx, actor: Actor, input: { name: string
   return row;
 }
 
-/** Old employees/edit also allowed overwriting the unpaid balance directly. */
+/**
+ * Old employees/edit also allowed overwriting the unpaid balance directly. `wageBalanceBefore` is
+ * the balance the form showed: if a wage was accrued or paid since, an unchanged field leaves the
+ * new balance alone and a changed one is refused instead of silently undoing that payment.
+ */
 export async function updateEmployee(
   tx: Tx,
   actor: Actor,
   employeeId: number,
-  input: { name: string; wageBalance: Decimal },
+  input: { name: string; wageBalance: Decimal; wageBalanceBefore: Decimal },
 ) {
   const employee = await lockEmployee(tx, actor, employeeId);
+  const current = dec(employee.wageBalance);
+  const balanceEdited = !input.wageBalance.equals(input.wageBalanceBefore);
+  if (balanceEdited && !current.equals(input.wageBalanceBefore)) {
+    throw new ActionError(
+      `ხელფასის ნაშთი შეიცვალა სხვა ჩანაწერით (ახლა ${formatAmount(current)} ₾). განაახლეთ გვერდი და სცადეთ თავიდან.`,
+      { wageBalance: `ახლანდელი ნაშთი: ${formatAmount(current)} ₾` },
+    );
+  }
+  const wageBalance = balanceEdited ? input.wageBalance : current;
   await tx
     .update(employees)
-    .set({ name: input.name, wageBalance: toDb(input.wageBalance) })
+    .set({ name: input.name, wageBalance: toDb(wageBalance) })
     .where(eq(employees.id, employeeId));
   await audit(tx, {
     storeId: actor.storeId,
@@ -214,9 +270,9 @@ export async function updateEmployee(
     action: "employee.update",
     entityType: "employee",
     entityId: employeeId,
-    summary: dec(employee.wageBalance).equals(input.wageBalance)
-      ? `${input.name}: მონაცემები განახლდა`
-      : `${input.name}: ხელფასის ნაშთი ${formatAmount(employee.wageBalance)} → ${formatAmount(input.wageBalance)} ₾`,
+    summary: balanceEdited
+      ? `${input.name}: ხელფასის ნაშთი ${formatAmount(current)} → ${formatAmount(wageBalance)} ₾`
+      : `${input.name}: მონაცემები განახლდა`,
   });
 }
 

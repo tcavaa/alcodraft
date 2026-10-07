@@ -1,18 +1,16 @@
 "use client";
 
-import { Archive, ArchiveRestore, Banknote, Pencil, Trash2 } from "lucide-react";
-import { useActionState, useState, useTransition } from "react";
-import { toast } from "sonner";
+import { Banknote, Pencil, Trash2 } from "lucide-react";
 
 import { ConfirmAction } from "@/components/confirm-action";
+import { AmountNoteForm } from "@/components/forms/amount-note-form";
 import { FormError, TextField } from "@/components/forms/fields";
 import { SubmitButton } from "@/components/forms/submit-button";
-import { RowMenu, type RowMenuItem } from "@/components/row-menu";
+import { archiveMenuItems, RowMenu } from "@/components/row-menu";
 import { Button } from "@/components/ui/button";
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
-import { Spinner } from "@/components/ui/spinner";
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Switch } from "@/components/ui/switch";
+import { useActionForm } from "@/hooks/use-action-form";
 import type { ActionResult } from "@/lib/action-result";
 import { storeHref } from "@/lib/routes";
 
@@ -32,12 +30,11 @@ export function SupplierForm({
   defaults?: { name: string; isReturns: boolean };
   submitLabel: string;
 }) {
-  const [state, formAction] = useActionState(action, undefined);
-  const errors = state && !state.ok ? state.fieldErrors : undefined;
+  const form = useActionForm(action);
   return (
-    <form action={formAction} className="space-y-6">
+    <form onSubmit={form.onSubmit} className="space-y-6">
       <FieldGroup>
-        <TextField label="დასახელება" name="name" defaultValue={defaults?.name} error={errors?.name} required autoFocus />
+        <TextField label="დასახელება" name="name" defaultValue={defaults?.name} error={form.errors?.name} required autoFocus />
         <Field orientation="horizontal">
           <Switch id="isReturns" name="isReturns" defaultChecked={defaults?.isReturns} />
           <div>
@@ -46,9 +43,11 @@ export function SupplierForm({
           </div>
         </Field>
       </FieldGroup>
-      <FormError message={state && !state.ok && !errors ? state.error : undefined} />
+      <FormError message={form.formError} />
       <div className="flex justify-end">
-        <SubmitButton size="lg">{submitLabel}</SubmitButton>
+        <SubmitButton size="lg" pending={form.pending}>
+          {submitLabel}
+        </SubmitButton>
       </div>
     </form>
   );
@@ -67,73 +66,41 @@ export function SupplierRowMenu({
   archived: boolean;
   canDelete: boolean;
 }) {
-  const items: RowMenuItem[] = [
-    { type: "link", label: "რედაქტირება", href: storeHref(storeId, `suppliers/${supplierId}/edit`), icon: <Pencil /> },
-    { type: "separator" },
-    archived
-      ? { type: "action", label: "აღდგენა", icon: <ArchiveRestore />, run: () => setSupplierArchivedAction(storeId, supplierId, false) }
-      : {
-          type: "action",
-          label: "სანაგვეში გადატანა",
-          icon: <Archive />,
-          run: () => setSupplierArchivedAction(storeId, supplierId, true),
-          confirm: { title: `${name} — სანაგვეში გადატანა?`, confirmLabel: "გადატანა" },
-        },
-  ];
-  if (archived && canDelete) {
-    items.push({
-      type: "action",
-      label: "სამუდამოდ წაშლა",
-      icon: <Trash2 />,
-      destructive: true,
-      run: () => deleteSupplierAction(storeId, supplierId),
-      confirm: {
-        title: `${name} — სამუდამოდ წაშლა?`,
-        description: "წაიშლება მხოლოდ თუ მიღებების ისტორია არ აქვს.",
-        confirmLabel: "წაშლა",
-      },
-    });
-  }
-  return <RowMenu items={items} />;
+  return (
+    <RowMenu
+      label={`${name} — მოქმედებები`}
+      items={[
+        { type: "link", label: "რედაქტირება", href: storeHref(storeId, `suppliers/${supplierId}/edit`), icon: <Pencil /> },
+        { type: "separator" },
+        ...archiveMenuItems({
+          name,
+          archived,
+          archive: () => setSupplierArchivedAction(storeId, supplierId, true),
+          restore: () => setSupplierArchivedAction(storeId, supplierId, false),
+          remove: canDelete
+            ? {
+                run: () => deleteSupplierAction(storeId, supplierId),
+                description: "წაიშლება მხოლოდ თუ მიღებები და გადახდები არ აქვს.",
+              }
+            : undefined,
+        }),
+      ]}
+    />
+  );
 }
 
 /** Old "გადახდა" box on the supplier page: amount + note → cash-book expense. */
-export function PaySupplierForm({ storeId, supplierId }: { storeId: number; supplierId: number }) {
-  const [amount, setAmount] = useState("");
-  const [note, setNote] = useState("");
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [pending, startTransition] = useTransition();
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    startTransition(async () => {
-      const result = await paySupplierAction(storeId, supplierId, { amount, note });
-      if (!result.ok) {
-        setErrors(result.fieldErrors ?? {});
-        toast.error(result.error);
-        return;
-      }
-      toast.success("გადახდა ჩაიწერა სალაროში");
-      setAmount("");
-      setNote("");
-      setErrors({});
-    });
-  };
+export function PaySupplierForm({ storeId, supplierId, supplierName }: { storeId: number; supplierId: number; supplierName: string }) {
   return (
-    <form onSubmit={submit} className="space-y-3">
-      <Field data-invalid={Boolean(errors.amount)}>
-        <FieldLabel htmlFor="pay-amount">თანხა (₾)</FieldLabel>
-        <Input id="pay-amount" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="0" className="text-right tabular-nums" />
-        {errors.amount ? <FieldError>{errors.amount}</FieldError> : null}
-      </Field>
-      <Field>
-        <FieldLabel htmlFor="pay-note">კომენტარი</FieldLabel>
-        <Input id="pay-note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="მაგ.: ნაწილობრივი გადახდა" />
-      </Field>
-      <Button type="submit" className="w-full" disabled={pending}>
-        {pending ? <Spinner /> : <Banknote />}
-        გადახდა
-      </Button>
-    </form>
+    <AmountNoteForm
+      idPrefix="pay"
+      notePlaceholder="მაგ.: ნაწილობრივი გადახდა"
+      submitLabel="გადახდა"
+      submitIcon={<Banknote />}
+      confirmTitle={`გადახდა მომწოდებელს — ${supplierName}`}
+      confirmDescription={() => <p>ჩაიწერება სალაროში ხარჯად და შეამცირებს მომწოდებლის „დარჩა“-ს.</p>}
+      save={({ amount, note, requestId }) => paySupplierAction(storeId, supplierId, { amount, note, requestId })}
+    />
   );
 }
 
@@ -141,7 +108,7 @@ export function DeleteReceiptButton({ storeId, receiptId, number }: { storeId: n
   return (
     <ConfirmAction
       trigger={
-        <Button variant="ghost" className="text-destructive hover:text-destructive">
+        <Button variant="ghost" className="text-destructive hover:text-destructive print:hidden">
           <Trash2 />
           წაშლა
         </Button>

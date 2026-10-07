@@ -4,22 +4,24 @@ import Link from "next/link";
 
 import { DateRangeFilter } from "@/components/data/date-range-filter";
 import { Pagination } from "@/components/data/pagination";
-import { ParamCombobox } from "@/components/data/param-combobox";
 import { ParamSelect } from "@/components/data/param-select";
 import { SearchInput } from "@/components/data/search-input";
 import { SortableHead } from "@/components/data/sortable-head";
+import { HeadRow, TableCard } from "@/components/data/table-card";
 import { EmptyState } from "@/components/empty-state";
 import { Money } from "@/components/money";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableFooter, TableHeader, TableRow } from "@/components/ui/table";
+import { CustomerFilter } from "@/features/sales/components/customer-filter";
 import { OPERATION_KIND_LABEL, operationKind } from "@/features/sales/labels";
 import { paymentLabel } from "@/features/sales/logic";
 import { listCustomerFilterOptions, listOperations, OPERATION_SORTS } from "@/features/sales/queries";
-import { formatDate, isIsoDate } from "@/lib/dates";
+import { formatDate } from "@/lib/dates";
+import { formatQty } from "@/lib/money";
 import { storeHref } from "@/lib/routes";
-import { intParam, pageParam, param, sortParam } from "@/lib/search-params";
+import { dateRangeParam, enumParam, intParam, pageParam, param, sortParam } from "@/lib/search-params";
 import { requireStore } from "@/server/auth/dal";
 
 export const metadata: Metadata = { title: "ოპერაციები" };
@@ -31,21 +33,15 @@ export default async function OperationsPage({ params, searchParams }: PageProps
   const { store } = await requireStore(storeId);
   const sp = await searchParams;
   const page = pageParam(sp);
-  const from = param(sp, "from");
-  const to = param(sp, "to");
-  const methodParam = param(sp, "method");
-  const kindParam = param(sp, "kind");
-  const method = methodParam === "cash" || methodParam === "card" || methodParam === "back" ? methodParam : undefined;
-  const kind = kindParam === "delivery" || kindParam === "payment" || kindParam === "adjustment" ? kindParam : undefined;
-
+  const method = enumParam(sp, "method", ["cash", "card", "back"] as const);
+  const kind = enumParam(sp, "kind", ["delivery", "payment", "adjustment"] as const);
   const customerId = intParam(sp, "customer");
 
   const [list, customerOptions] = await Promise.all([
     listOperations(store.id, {
       q: param(sp, "q"),
       customerId,
-      from: from && isIsoDate(from) ? from : undefined,
-      to: to && isIsoDate(to) ? to : undefined,
+      ...dateRangeParam(sp),
       method,
       kind,
       sort: sortParam(sp, OPERATION_SORTS),
@@ -75,21 +71,8 @@ export default async function OperationsPage({ params, searchParams }: PageProps
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <SearchInput className="sm:w-72" placeholder="კლიენტი, კომენტარი ან №…" />
         <DateRangeFilter />
-        <div className="flex flex-wrap gap-2 sm:ml-auto">
-          <ParamCombobox
-            param="customer"
-            value={customerId ? String(customerId) : undefined}
-            label="კლიენტი"
-            placeholder="კლიენტის ძებნა…"
-            emptyText="კლიენტი ვერ მოიძებნა."
-            className="w-64"
-            options={customerOptions.map((c) => ({
-              value: String(c.id),
-              label: c.name,
-              hint: [c.address, c.isArchived ? "სანაგვე" : ""].filter(Boolean).join(" · ") || undefined,
-              muted: c.isArchived,
-            }))}
-          />
+        <div className="flex flex-wrap gap-2">
+          <CustomerFilter options={customerOptions} value={customerId} className="w-64" />
           <ParamSelect
             param="kind"
             value={kind ?? "all"}
@@ -120,10 +103,10 @@ export default async function OperationsPage({ params, searchParams }: PageProps
       {list.rows.length === 0 ? (
         <EmptyState icon={ReceiptText} title="ოპერაციები ვერ მოიძებნა" description="შეცვალეთ ფილტრები ან ძებნა." />
       ) : (
-        <div className="overflow-hidden rounded-xl border bg-card">
+        <TableCard>
           <Table>
             <TableHeader>
-              <TableRow className="bg-muted/40 hover:bg-muted/40">
+              <HeadRow>
                 <SortableHead column="date" first="desc">
                   თარიღი
                 </SortableHead>
@@ -140,7 +123,7 @@ export default async function OperationsPage({ params, searchParams }: PageProps
                 <SortableHead column="total" className="text-right">
                   სულ ჯამში
                 </SortableHead>
-              </TableRow>
+              </HeadRow>
             </TableHeader>
             <TableBody>
               {list.rows.map((op) => {
@@ -190,7 +173,7 @@ export default async function OperationsPage({ params, searchParams }: PageProps
             </TableBody>
             <TableFooter>
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={2}>სულ ({list.count} ოპერაცია)</TableCell>
+                <TableCell colSpan={2}>სულ ({formatQty(list.count)} ოპერაცია)</TableCell>
                 <TableCell className="text-right font-semibold">
                   <Money value={list.paid} currency />
                 </TableCell>
@@ -202,7 +185,7 @@ export default async function OperationsPage({ params, searchParams }: PageProps
               </TableRow>
             </TableFooter>
           </Table>
-        </div>
+        </TableCard>
       )}
       <Pagination page={page} pageSize={PAGE_SIZE} total={list.count} pathname={pathname} searchParams={sp} />
     </>

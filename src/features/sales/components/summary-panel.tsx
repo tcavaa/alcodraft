@@ -17,9 +17,10 @@ import { DISCOUNT_OPTIONS, PAYMENT_METHODS, type PaymentMethod } from "../logic"
 export interface SummaryValues {
   discountFactor: string;
   paid: string;
-  method: PaymentMethod;
-  hasWaybill: boolean;
-  uploadStatus: "pending" | "uploaded";
+  /** null only on imported documents saved before the old app recorded these. */
+  method: PaymentMethod | null;
+  hasWaybill: boolean | null;
+  uploadStatus: "pending" | "uploaded" | null;
   comment: string;
 }
 
@@ -39,6 +40,9 @@ export function SummaryPanel({
   onSubmit,
   pending,
   errors,
+  totalNote,
+  footer,
+  adjustment,
 }: {
   values: SummaryValues;
   onChange: (patch: Partial<SummaryValues>) => void;
@@ -54,9 +58,16 @@ export function SummaryPanel({
   onSubmit: () => void;
   pending: boolean;
   errors: Record<string, string>;
+  /** Extra line under the total (e.g. an imported document's old difference). */
+  totalNote?: React.ReactNode;
+  /** Rendered under the submit button (order completion / cancel). */
+  footer?: React.ReactNode;
+  /** Old manual debt correction carried by an imported operation (part of its debt step). */
+  adjustment?: string;
 }) {
   const paid = parseAmount(values.paid || "0");
-  const after = previousDebt !== null && paid ? dec(previousDebt).plus(total).minus(paid) : null;
+  const correction = dec(adjustment ?? 0);
+  const after = previousDebt !== null && paid ? dec(previousDebt).plus(total).minus(paid).plus(correction) : null;
 
   return (
     <div className="space-y-5 rounded-xl border bg-card p-5 shadow-xs">
@@ -75,16 +86,17 @@ export function SummaryPanel({
             </span>
           ) : null}
         </div>
+        {totalNote ? <p className="text-xs text-muted-foreground">{totalNote}</p> : null}
       </div>
 
       <Field>
-        <FieldLabel>ფასდაკლება</FieldLabel>
+        <FieldLabel htmlFor="discount">ფასდაკლება</FieldLabel>
         <Select
           value={values.discountFactor}
           onValueChange={(v) => onChange({ discountFactor: v })}
           disabled={!discountEditable}
         >
-          <SelectTrigger className="w-full">
+          <SelectTrigger id="discount" className="w-full">
             <SelectValue>
               {DISCOUNT_OPTIONS.find((o) => o.factor === values.discountFactor)?.label ??
                 (formatDiscount(values.discountFactor) || values.discountFactor)}
@@ -120,14 +132,15 @@ export function SummaryPanel({
         {errors.paidAmount ? <FieldError>{errors.paidAmount}</FieldError> : null}
       </Field>
 
-      <Field>
-        <FieldLabel>გადახდის მეთოდი</FieldLabel>
+      <Field data-invalid={Boolean(errors.paymentMethod)}>
+        <FieldLabel id="method-label">გადახდის მეთოდი</FieldLabel>
         <ToggleGroup
           type="single"
           variant="outline"
-          value={values.method}
+          value={values.method ?? ""}
           onValueChange={(v) => v && onChange({ method: v as PaymentMethod })}
           className="w-full"
+          aria-labelledby="method-label"
         >
           {PAYMENT_METHODS.map((m) => (
             <ToggleGroupItem key={m.value} value={m.value} className="flex-1" title={m.hint}>
@@ -137,25 +150,30 @@ export function SummaryPanel({
         </ToggleGroup>
         {values.method === "back" ? (
           <p className="text-xs text-muted-foreground">„დაბრუნება“ ამცირებს ვალს, მაგრამ სალაროში არ ჩაიწერება.</p>
+        ) : values.method === null ? (
+          <p className="text-xs text-muted-foreground">ძველ ჩანაწერზე მეთოდი მითითებული არ არის — შეგიძლიათ ასე დატოვოთ.</p>
         ) : null}
+        {errors.paymentMethod ? <FieldError>{errors.paymentMethod}</FieldError> : null}
       </Field>
 
       <div className="flex items-center justify-between gap-3">
         <label htmlFor="waybill" className="text-sm">
           ზედნადები
+          {values.hasWaybill === null ? <span className="ml-1 text-xs text-muted-foreground">(არ არის მითითებული)</span> : null}
         </label>
-        <Switch id="waybill" checked={values.hasWaybill} onCheckedChange={(v) => onChange({ hasWaybill: v })} />
+        <Switch id="waybill" checked={values.hasWaybill ?? false} onCheckedChange={(v) => onChange({ hasWaybill: v })} />
       </div>
 
       {showUploadStatus ? (
         <Field>
-          <FieldLabel>სტატუსი (RS)</FieldLabel>
+          <FieldLabel id="rs-label">სტატუსი (RS)</FieldLabel>
           <ToggleGroup
             type="single"
             variant="outline"
-            value={values.uploadStatus}
+            value={values.uploadStatus ?? ""}
             onValueChange={(v) => v && onChange({ uploadStatus: v as "pending" | "uploaded" })}
             className="w-full"
+            aria-labelledby="rs-label"
           >
             <ToggleGroupItem value="pending" className="flex-1">
               ასატვირთი
@@ -188,6 +206,12 @@ export function SummaryPanel({
             <span className="text-muted-foreground">+ ჯამი − აღებული</span>
             <Money value={paid ? total.minus(paid) : total} />
           </div>
+          {!correction.isZero() ? (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">კორექტირება (ძველი სისტემიდან)</span>
+              <Money value={correction} />
+            </div>
+          ) : null}
           <Separator />
           <div className="flex justify-between font-semibold">
             <span>დარჩენილი</span>
@@ -202,6 +226,7 @@ export function SummaryPanel({
         {pending ? <Spinner /> : null}
         {submitLabel}
       </Button>
+      {footer}
     </div>
   );
 }

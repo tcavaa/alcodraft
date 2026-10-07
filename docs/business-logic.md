@@ -30,12 +30,28 @@ change. (The returned goods themselves go back to stock through a receipt from t
 The old edit page (reachable only by URL) changed quantities and stock but left `fullamount` and all
 debts stale; the old delete referenced a column that no longer existed. Now:
 
-- **Edit** (`updateDelivery`): lines (final unit prices), paid, method, waybill, comment. Stock moves by
-  the difference; total is recomputed; the debt of this and every later operation follows
-  automatically (window sum). Cash: the linked entry is updated/removed; imported operations whose
-  cash entry could not be linked get an appended correction entry for the difference.
+- **Edit** (`updateDelivery`): lines (final unit prices), paid, method, waybill, comment.
+  - Products the user doesn't change keep their saved rows exactly, line totals included; a changed
+    product is replaced by one recomputed row (`planLineEdit` in `logic.ts`, unit-tested). The total
+    becomes *saved total − removed rows + new rows*: an imported operation whose old total never
+    matched its rows (the old edit page left `fullamount` stale) keeps that difference, so fixing a
+    comment never moves a debt. The edit form shows the saved line totals and the kept difference.
+  - What an edit adds follows the rules of a new operation: the extra „შეტანილი“ must be in stock,
+    archived products can't be added, and an operation can't be left with no lines and nothing paid
+    (that is a delete, which only a super admin does).
+  - An empty payment method / waybill (imported rows) stays empty unless the user sets one; a method
+    that is set can't be removed.
+  - Stock moves by the difference; the debt of this and every later operation follows automatically
+    (window sum). Cash: the linked entry is updated/removed (a removed imported entry that carries an
+    old correction keeps the correction as its own row); an operation without a linked entry gets
+    an appended correction for the difference, by the old app's rule (every payment except `back`
+    was booked — including rows saved before the old app recorded a method).
 - **Delete** (`deleteDelivery`, super admin): stock restored, cash removed/reversed the same way,
-  a completed order is reopened.
+  a completed order is reopened. An imported operation that carries an old manual correction
+  (`adjustment_amount ≠ 0`) is turned into a correction row instead (kind `adjustment`, same number
+  and place in the history), so the debt after every later operation stays as it was; deleting that
+  correction row then removes it. A delete only runs if the row is still what the person confirmed
+  (an operation or a correction), so a second click from another tab can't remove the kept correction.
 
 ### Debt corrections (new)
 
@@ -47,10 +63,10 @@ debts stale; the old delete referenced a column that no longer existed. Now:
 | Step | Behaviour | Old source |
 |---|---|---|
 | Create | same lines and discount as an operation; **no stock or cash change**; `debt_snapshot` = customer's current debt, or the order total if the customer has no operations yet | `orders/add` |
-| Edit | prices are final per line (discount not re-applied, not changeable); qty, gift, leftover, paid, method, waybill, RS status, comment | `orders/edit` |
-| Complete „შეკვეთის დასრულება“ | creates an operation with the same lines/values: stock −= delivered + gift (**no stock check**), cash entry as above, debt formula; order → completed and linked | `orders/finish` |
+| Edit | prices are final per line (discount not re-applied, not changeable); qty, gift, leftover, paid, method, waybill, RS status, comment; untouched products keep their saved rows (as for operations) | `orders/edit` |
+| Complete „შეკვეთის დასრულება“ | creates an operation with the same lines/values and the order's saved total: stock −= delivered + gift (**no stock check**), cash entry as above, debt formula; order → completed and linked. Changes still unsaved on the order page are saved first, in the same transaction („შენახვა და დასრულება“). An order with money paid but no method (imported) needs a method first | `orders/finish` |
 | Cancel „გაუქმება“ | status cancelled (old status 3) | `orders/disable` |
-| Quick edits | RS status (ასატვირთი/ატვირთული) and comment editable from the lists, any status | inline forms in `orders/index`, `ordershistory`, `all` |
+| Quick edits | RS status (ასატვირთი/ატვირთული) and comment editable from the lists, any status; the RS status of a completed order is copied to its operation | inline forms in `orders/index`, `ordershistory`, `all` |
 | All orders | open orders of every store the user can open | `orders/all` (stores 1, 4, 5, 6 only) |
 
 The order form warns (doesn't block) when a quantity exceeds stock — stock may arrive before delivery.
@@ -58,7 +74,7 @@ The order form warns (doesn't block) when a quantity exceeds stock — stock may
 ## Stock receipts — „მიღება“ (old `drinks/stock`, `drinks_history`)
 
 - For each product: stock += received quantity; the line stores the stock before and the purchase
-  price paid („შემოტანის ფასი“, default = product's purchase price).
+  price paid („შემოტანის ფასი“, pre-filled with the product's purchase price; required).
 - The product's purchase price is **not** changed by a receipt; the receipt page shows a differing
   price in amber (old: red).
 - The form lists the chosen supplier's products; the "returns" supplier (old supplier id 4,
@@ -68,8 +84,10 @@ The order form warns (doesn't block) when a quantity exceeds stock — stock may
 ## Suppliers — „მომწოდებელი“ (old `drinks/historylistmomw`)
 
 - To pay „სულ გადასახდელი“ = Σ over the supplier's receipts of quantity × unit cost.
-- Paid = Σ cash-book expenses linked to the supplier (old: every finance row whose comment equals the
-  supplier's name — imported rows were linked by that exact rule).
+- Paid = Σ cash-book expenses (`amount_out`) linked to the supplier (old: every finance row whose
+  comment equals the supplier's name — imported rows were linked by that exact rule). Income rows
+  linked to a supplier don't count. The list and the supplier page use the same expression
+  (`supplierPaidSum` in `src/server/db/expressions.ts`).
 - Remaining „დარჩა“ = to pay − paid. Paying writes an expense with the supplier's name as text and the
   note as the second comment (old `comment2`).
 - **Difference:** the old page cut every receipt total and payment to whole lari (`(int)` cast). The new
@@ -94,6 +112,10 @@ The order form warns (doesn't block) when a quantity exceeds stock — stock may
 - Price history „შეცვლის ისტორია“: old app saved the previous prices on **every** edit; now only when a
   price actually changes, and the new prices are saved too.
 - Inventory correction „ინვენტარიზაცია“ (new): set the real count with a reason → `stock_adjustments`.
+  Refused when the stock changed after the dialog opened (a receipt or sale meanwhile), so a count
+  can't silently wipe that movement.
+- Hard delete (super admin) only for products that never appeared anywhere; suppliers only without
+  receipts **and** payments.
 
 ## Cash book — „სალარო“ (old `finance`)
 
@@ -107,14 +129,26 @@ The order form warns (doesn't block) when a quantity exceeds stock — stock may
   value as the balance. Affected months are listed in the import report.
 - Stores can have several books; automatic entries go to the default one.
 - Delete (super admin): not for entries that belong to an operation (edit the operation instead);
-  deleting a wage payment gives the amount back to the employee's balance.
+  deleting a wage payment gives the amount back to the employee's balance. An imported entry that
+  also carries an old manual balance correction keeps the correction (amounts zeroed, same place),
+  so later balances don't move.
 
 ## Wages — „ხელფასები“ (old `employees`, `historywages`)
 
 - `wage_balance` = wages owed and not yet paid (old `employees.wage`).
 - Accrue „დარიცხვა“: adds a `wage_accruals` row and increases the balance.
 - Pay „გაცემა“: cash-book expense (text = employee name, note) and decreases the balance.
-- Editing an employee may overwrite the balance directly (old edit form did the same).
+- Editing an employee may overwrite the balance directly (old edit form did the same). The form sends
+  the balance it showed: if a wage was accrued or paid meanwhile, an unchanged field keeps the new
+  balance and a changed one is refused (no silent undo of a payment).
+
+## Double submits
+
+Creates that move money or stock (operation, order, receipt, cash entry, supplier payment, wage
+accrual/payment, debt correction) send a one-time request id from the form. The server records it in
+the same transaction (`request_keys`, `once()` in `src/server/db/once.ts`): a double click or a retry
+after a lost connection (the form stays filled in, with the same id) gets the first result instead of
+a second document. Two separate tabs are two separate requests.
 
 ## Numbers typed by people
 

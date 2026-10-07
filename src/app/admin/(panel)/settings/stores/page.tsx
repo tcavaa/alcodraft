@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { SortableHead } from "@/components/data/sortable-head";
+import { HeadRow, TableCard } from "@/components/data/table-card";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -43,10 +44,10 @@ export default async function StoresAdminPage({ searchParams }: PageProps<"/admi
           </Button>
         }
       />
-      <div className="overflow-hidden rounded-xl border bg-card">
+      <TableCard>
         <Table>
           <TableHeader>
-            <TableRow className="bg-muted/40 hover:bg-muted/40">
+            <HeadRow>
               <SortableHead column="name">დასახელება</SortableHead>
               <SortableHead column="users" className="text-right">
                 მომხმარებელი
@@ -63,7 +64,7 @@ export default async function StoresAdminPage({ searchParams }: PageProps<"/admi
               <SortableHead column="last" className="hidden text-right lg:table-cell">
                 ბოლო ოპერაცია
               </SortableHead>
-            </TableRow>
+            </HeadRow>
           </TableHeader>
           <TableBody>
             {stores.map((s) => (
@@ -88,7 +89,7 @@ export default async function StoresAdminPage({ searchParams }: PageProps<"/admi
             ))}
           </TableBody>
         </Table>
-      </div>
+      </TableCard>
     </>
   );
 }

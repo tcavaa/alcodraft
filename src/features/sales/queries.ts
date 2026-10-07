@@ -4,6 +4,7 @@ import { and, asc, count, desc, eq, gte, ilike, inArray, lte, or, sql, type SQL 
 
 import type { SortState } from "@/lib/sort";
 import { db } from "@/server/db";
+import { debtDelta, debtSum, debtSumOrZero, likePattern } from "@/server/db/expressions";
 import { by } from "@/server/db/order";
 import {
   customers,
@@ -17,8 +18,6 @@ import {
   suppliers,
   users,
 } from "@/server/db/schema";
-
-const likeEscape = (q: string) => `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 
 /** Running debt after each operation, per customer, over the store's whole history. */
 function runningDeliveries(storeId: number) {
@@ -36,7 +35,7 @@ function runningDeliveries(storeId: number) {
       hasWaybill: deliveries.hasWaybill,
       comment: deliveries.comment,
       debtAfter:
-        sql<string>`sum(${deliveries.totalAmount} - ${deliveries.paidAmount} + ${deliveries.adjustmentAmount}) over (partition by ${deliveries.customerId} order by ${deliveries.id})`.as(
+        sql<string>`sum(${debtDelta}) over (partition by ${deliveries.customerId} order by ${deliveries.id})`.as(
           "debt_after",
         ),
     })
@@ -65,7 +64,7 @@ export async function listOperations(storeId: number, p: OperationListParams) {
   const running = runningDeliveries(storeId);
   const conditions: (SQL | undefined)[] = [];
   if (p.q) {
-    const like = likeEscape(p.q);
+    const like = likePattern(p.q);
     conditions.push(
       or(ilike(customers.name, like), ilike(running.comment, like), sql`${running.number}::text = ${p.q}`),
     );
@@ -165,7 +164,7 @@ export async function getOperation(storeId: number, deliveryId: number) {
       .orderBy(asc(deliveryItems.id)),
     db
       .select({
-        after: sql<string>`coalesce(sum(${deliveries.totalAmount} - ${deliveries.paidAmount} + ${deliveries.adjustmentAmount}), 0)`,
+        after: debtSumOrZero,
       })
       .from(deliveries)
       .where(and(eq(deliveries.customerId, delivery.customer.id), lte(deliveries.id, deliveryId))),
@@ -223,7 +222,7 @@ export async function listCustomerOptionsWithDebt(storeId: number): Promise<Cust
   const stats = db
     .select({
       customerId: deliveries.customerId,
-      debt: sql<string>`sum(${deliveries.totalAmount} - ${deliveries.paidAmount} + ${deliveries.adjustmentAmount})`.as("debt"),
+      debt: debtSum.as("debt"),
     })
     .from(deliveries)
     .where(eq(deliveries.storeId, storeId))
@@ -257,8 +256,6 @@ export interface OrderListParams {
   pageSize: number;
 }
 
-const customerDebtSql = sql<string>`(select coalesce(sum(d.total_amount - d.paid_amount + d.adjustment_amount), 0) from app.deliveries d where d.customer_id = ${customers.id})`;
-
 /** Old orders/index (open) and orders/ordershistory (completed + cancelled). */
 export async function listOrders(storeIds: number[], p: OrderListParams) {
   const ids = storeIds.length ? storeIds : [0];
@@ -266,7 +263,7 @@ export async function listOrders(storeIds: number[], p: OrderListParams) {
   const debts = db
     .select({
       customerId: deliveries.customerId,
-      debt: sql<string>`sum(${deliveries.totalAmount} - ${deliveries.paidAmount} + ${deliveries.adjustmentAmount})`.as("debt"),
+      debt: debtSum.as("debt"),
     })
     .from(deliveries)
     .where(inArray(deliveries.storeId, ids))
@@ -279,7 +276,7 @@ export async function listOrders(storeIds: number[], p: OrderListParams) {
   ];
   if (p.customerId) conditions.push(eq(orders.customerId, p.customerId));
   if (p.q) {
-    const like = likeEscape(p.q);
+    const like = likePattern(p.q);
     conditions.push(
       or(ilike(customers.name, like), ilike(customers.address, like), ilike(orders.comment, like), sql`${orders.number}::text = ${p.q}`),
     );
@@ -412,7 +409,7 @@ export async function getOrder(storeId: number, orderId: number) {
       .innerJoin(products, eq(products.id, orderItems.productId))
       .where(eq(orderItems.orderId, orderId))
       .orderBy(desc(orderItems.quantity), desc(orderItems.giftQty), asc(orderItems.id)),
-    db.select({ debt: customerDebtSql }).from(customers).where(eq(customers.id, row.customer.id)),
+    db.select({ debt: debtSumOrZero }).from(deliveries).where(eq(deliveries.customerId, row.customer.id)),
     row.order.deliveryId
       ? db
           .select({ id: deliveries.id, number: deliveries.number })
@@ -422,12 +419,3 @@ export async function getOrder(storeId: number, orderId: number) {
   ]);
   return { ...row, items, currentDebt: debt?.debt ?? "0", delivery: delivery[0] ?? null };
 }
-
-export async function countOpenOrders(storeId: number) {
-  const [{ n }] = await db
-    .select({ n: count() })
-    .from(orders)
-    .where(and(eq(orders.storeId, storeId), eq(orders.status, "open")));
-  return n;
-}
-

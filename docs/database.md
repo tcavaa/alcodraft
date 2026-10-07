@@ -25,7 +25,8 @@ for `company`, `distribution`, `orders`, `momwodebeli`, `finance` …). Now one 
 | `finance_accounts` | the `finance*` tables | default book per store; stores 1–2 also have "ფინანსები 2" (`finance2`, `finance4`) |
 | `finance_entries` | `finance`, `finance3`, `finance5`, `finance7`, `finance9`, `finance11`, `finance2`, `finance4` | links to delivery / supplier / employee |
 | `employees`, `wage_accruals` | `employees`, `wages_history` | wage payments are `finance_entries` (kind `wage_payment`) |
-| `audit_log` | — | who changed what |
+| `audit_log` | — | who changed what (also the login throttle: `auth.login_failed` rows) |
+| `request_keys` | — | one row per create sent with a request id — stops double submits (`once()`) |
 | — | `hours`, `time*` | dropped: unused PlayStation-timer experiment and dead tables |
 
 Store mapping: set1 = names.id 1 (გეალკო თბილისი), set2 = 4 (გეალკო ბათუმი), set3 = 5 (ტექნოჰაბი),
@@ -40,7 +41,7 @@ set5 → `finance9`, set6 → `finance11`.
 | Customer debt after operation N | `SUM(total_amount − paid_amount + adjustment_amount) OVER (PARTITION BY customer_id ORDER BY id)` | `distribution.darchenili` |
 | Customer current debt | same SUM over all the customer's operations | latest `darchenili` |
 | Cash-book balance after entry N | `SUM(amount_in − amount_out + adjustment_amount) OVER (ORDER BY id)` per account | `finance.balance` |
-| Supplier "remaining to pay" | Σ(receipt qty × unit_cost) − Σ(payments with supplier_id) | `historylistmomw` |
+| Supplier "remaining to pay" | Σ(receipt qty × unit_cost) − Σ(`amount_out` of entries with supplier_id) | `historylistmomw` |
 
 `adjustment_amount` holds corrections: imported rows where the old stored value did not follow
 the formula (manual phpMyAdmin edits) carry the exact difference, so **every historical number is
@@ -54,8 +55,9 @@ Stock is stored (`products.stock_qty`) and only changed in the transaction that 
 
 Every foreign key used for lookups is indexed; the hot paths are
 `deliveries(customer_id, id)`, `deliveries(store_id, delivery_date)`, `delivery_items(delivery_id)`,
-`finance_entries(account_id, id)`, `orders(store_id, status, id)`. Unique: `(store_id, number)` on
-deliveries, orders and receipts. Window functions over a store's ~10k operations take a few ms.
+`finance_entries(account_id, id)`, `orders(store_id, status, id)`, `audit_log(action, created_at)`
+(login throttle). Unique: `(store_id, number)` on deliveries, orders and receipts. Window functions
+over a store's ~10k operations take a few ms.
 
 ## Migrations
 
@@ -66,7 +68,8 @@ npm run db:migrate                                 # applies to DATABASE_URL_SES
 ```
 
 Hand-written SQL: `npx drizzle-kit generate --custom --name x`. Never edit an applied migration.
-The applied list lives in `drizzle.__drizzle_migrations`.
+The applied list lives in `drizzle.__drizzle_migrations`. New tables get the same `anon` /
+`authenticated` revoke as `0001` (see `0003_request_keys_and_login_index.sql`).
 
 ## Conventions
 

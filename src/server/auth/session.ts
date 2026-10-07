@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash, randomBytes } from "node:crypto";
 
-import { and, eq, lt } from "drizzle-orm";
+import { eq, lt } from "drizzle-orm";
 import { cookies, headers } from "next/headers";
 import { cache } from "react";
 
@@ -30,6 +30,12 @@ async function setSessionCookie(token: string, expiresAt: Date) {
   });
 }
 
+/** The visitor's IP as reported by the platform (Vercel sets `x-forwarded-for`). */
+export async function clientIp(): Promise<string | null> {
+  const h = await headers();
+  return (h.get("x-forwarded-for") ?? "").split(",")[0].trim().slice(0, 64) || null;
+}
+
 /** Creates a session and sets the cookie. Call from Server Actions only. */
 export async function createSession(userId: number): Promise<void> {
   const token = randomBytes(32).toString("base64url");
@@ -39,7 +45,7 @@ export async function createSession(userId: number): Promise<void> {
     id: hashToken(token),
     userId,
     expiresAt,
-    ipAddress: (h.get("x-forwarded-for") ?? "").split(",")[0].trim().slice(0, 64) || null,
+    ipAddress: await clientIp(),
     userAgent: h.get("user-agent")?.slice(0, 400) ?? null,
   });
   await setSessionCookie(token, expiresAt);
@@ -53,16 +59,10 @@ export async function destroySession(): Promise<void> {
   store.delete(SESSION_COOKIE);
 }
 
-/** Signs a user out everywhere (password change, deactivation, deletion). */
-export async function revokeUserSessions(userId: number, exceptCurrent = false): Promise<void> {
-  if (!exceptCurrent) {
-    await db.delete(sessions).where(eq(sessions.userId, userId));
-    return;
-  }
+/** Stored id of this request's session (to keep it when signing a user out elsewhere). */
+export async function currentSessionId(): Promise<string | null> {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;
-  const keep = token ? hashToken(token) : "";
-  const rows = await db.select({ id: sessions.id }).from(sessions).where(eq(sessions.userId, userId));
-  for (const row of rows) if (row.id !== keep) await db.delete(sessions).where(eq(sessions.id, row.id));
+  return token ? hashToken(token) : null;
 }
 
 /**
@@ -102,5 +102,5 @@ export const getCurrentUser = cache(async (): Promise<SessionUser | null> => {
 
 /** Housekeeping, run opportunistically on login. */
 export async function deleteExpiredSessions(): Promise<void> {
-  await db.delete(sessions).where(and(lt(sessions.expiresAt, new Date())));
+  await db.delete(sessions).where(lt(sessions.expiresAt, new Date()));
 }

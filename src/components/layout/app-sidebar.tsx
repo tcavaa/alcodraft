@@ -2,7 +2,7 @@
 
 import { Check, ChevronsUpDown, LogOut, Monitor, Moon, Store, Sun, UserRound } from "lucide-react";
 import Link from "next/link";
-import { useParams, usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useTheme } from "next-themes";
 
 import { Wordmark } from "@/components/brand/wordmark";
@@ -36,6 +36,7 @@ import {
 import { logoutAction } from "@/features/auth/actions";
 
 import { ADMIN_NAV, GLOBAL_NAV, STORE_NAV, storeHref } from "./nav";
+import { useCurrentStoreId } from "./use-current-store";
 
 export interface SidebarUser {
   name: string;
@@ -51,8 +52,13 @@ export interface SidebarStore {
 
 export function AppSidebar({ user, stores }: { user: SidebarUser; stores: SidebarStore[] }) {
   const pathname = usePathname();
-  const params = useParams<{ storeId?: string }>();
-  const current = stores.find((s) => String(s.id) === params.storeId) ?? null;
+  const currentId = useCurrentStoreId();
+  const current = stores.find((s) => s.id === currentId) ?? null;
+  // On phones the sidebar is a sheet over the page: close it once a link is chosen.
+  const { isMobile, setOpenMobile } = useSidebar();
+  const closeOnMobile = () => {
+    if (isMobile) setOpenMobile(false);
+  };
 
   const isActive = (href: string, exact: boolean) =>
     exact ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
@@ -60,13 +66,13 @@ export function AppSidebar({ user, stores }: { user: SidebarUser; stores: Sideba
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="gap-3 px-3 pt-4">
-        <Link href="/admin" className="flex h-8 items-center px-1 group-data-[collapsible=icon]:justify-center">
+        <Link href="/admin" onClick={closeOnMobile} className="flex h-8 items-center px-1 group-data-[collapsible=icon]:justify-center">
           <Wordmark onDark className="text-[1.65rem] leading-none group-data-[collapsible=icon]:hidden" />
           <span className="hidden font-display text-xl font-bold text-sidebar-primary group-data-[collapsible=icon]:block">
             A
           </span>
         </Link>
-        <StoreSwitcher stores={stores} current={current} pathname={pathname} />
+        <StoreSwitcher stores={stores} current={current} pathname={pathname} onNavigate={closeOnMobile} />
       </SidebarHeader>
 
       <SidebarContent className="pb-4">
@@ -85,7 +91,7 @@ export function AppSidebar({ user, stores }: { user: SidebarUser; stores: Sideba
                     return (
                       <SidebarMenuItem key={item.segment}>
                         <SidebarMenuButton asChild isActive={active} tooltip={item.title}>
-                          <Link href={href}>
+                          <Link href={href} onClick={closeOnMobile} aria-current={active ? "page" : undefined}>
                             <item.icon />
                             <span>{item.title}</span>
                           </Link>
@@ -104,7 +110,7 @@ export function AppSidebar({ user, stores }: { user: SidebarUser; stores: Sideba
             {GLOBAL_NAV.map((item) => (
               <SidebarMenuItem key={item.href}>
                 <SidebarMenuButton asChild isActive={isActive(item.href, true)} tooltip={item.title}>
-                  <Link href={item.href}>
+                  <Link href={item.href} onClick={closeOnMobile} aria-current={isActive(item.href, true) ? "page" : undefined}>
                     <item.icon />
                     <span>{item.title}</span>
                   </Link>
@@ -121,7 +127,7 @@ export function AppSidebar({ user, stores }: { user: SidebarUser; stores: Sideba
               {ADMIN_NAV.map((item) => (
                 <SidebarMenuItem key={item.href}>
                   <SidebarMenuButton asChild isActive={isActive(item.href, false)} tooltip={item.title}>
-                    <Link href={item.href}>
+                    <Link href={item.href} onClick={closeOnMobile} aria-current={isActive(item.href, false) ? "page" : undefined}>
                       <item.icon />
                       <span>{item.title}</span>
                     </Link>
@@ -134,7 +140,7 @@ export function AppSidebar({ user, stores }: { user: SidebarUser; stores: Sideba
       </SidebarContent>
 
       <SidebarFooter className="pb-3">
-        <UserMenu user={user} />
+        <UserMenu user={user} onNavigate={closeOnMobile} />
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
@@ -145,10 +151,12 @@ function StoreSwitcher({
   stores,
   current,
   pathname,
+  onNavigate,
 }: {
   stores: SidebarStore[];
   current: SidebarStore | null;
   pathname: string;
+  onNavigate: () => void;
 }) {
   const router = useRouter();
   const { isMobile } = useSidebar();
@@ -185,7 +193,10 @@ function StoreSwitcher({
             {stores.map((store) => (
               <DropdownMenuItem
                 key={store.id}
-                onSelect={() => router.push(storeHref(store.id, section))}
+                onSelect={() => {
+                  onNavigate();
+                  router.push(storeHref(store.id, section));
+                }}
                 className="gap-2"
               >
                 <span className="flex-1 truncate">{store.name}</span>
@@ -200,7 +211,7 @@ function StoreSwitcher({
   );
 }
 
-function UserMenu({ user }: { user: SidebarUser }) {
+function UserMenu({ user, onNavigate }: { user: SidebarUser; onNavigate: () => void }) {
   const { isMobile } = useSidebar();
   const { theme, setTheme } = useTheme();
   const initials = (user.name || user.email).slice(0, 2).toUpperCase();
@@ -236,7 +247,7 @@ function UserMenu({ user }: { user: SidebarUser }) {
             <DropdownMenuSeparator />
             <DropdownMenuGroup>
               <DropdownMenuItem asChild>
-                <Link href="/admin/account">
+                <Link href="/admin/account" onClick={onNavigate}>
                   <UserRound />
                   ჩემი ანგარიში
                 </Link>

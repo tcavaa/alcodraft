@@ -1,11 +1,12 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useState } from "react";
 
 import { AmountField, FormError, TextAreaField, TextField } from "@/components/forms/fields";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useActionForm } from "@/hooks/use-action-form";
 import type { ActionResult } from "@/lib/action-result";
 import { dec } from "@/lib/money";
 
@@ -20,8 +21,8 @@ export function ProductForm({
   defaults?: { name: string; supplierId: number | null; salePrice: string; purchasePrice: string; comment: string };
   submitLabel: string;
 }) {
-  const [state, formAction] = useActionState(action, undefined);
-  const errors = state && !state.ok ? state.fieldErrors : undefined;
+  const form = useActionForm(action);
+  const errors = form.errors;
   const supplierOptions = [
     { value: "none", label: "— მომწოდებლის გარეშე —" },
     ...suppliers
@@ -31,7 +32,7 @@ export function ProductForm({
   const [supplierId, setSupplierId] = useState(defaults?.supplierId ? String(defaults.supplierId) : "none");
 
   return (
-    <form action={formAction} className="space-y-6">
+    <form onSubmit={form.onSubmit} className="space-y-6">
       <FieldGroup className="grid gap-5 sm:grid-cols-2">
         <TextField
           label="დასახელება"
@@ -42,9 +43,9 @@ export function ProductForm({
           className="sm:col-span-2"
         />
         <Field data-invalid={Boolean(errors?.supplierId)} className="sm:col-span-2">
-          <FieldLabel>მომწოდებელი</FieldLabel>
+          <FieldLabel htmlFor="supplierId">მომწოდებელი</FieldLabel>
           <Select name="supplierId" value={supplierId} onValueChange={setSupplierId}>
-            <SelectTrigger className="w-full">
+            <SelectTrigger id="supplierId" className="w-full">
               {/* Label rendered on the server too (Radix fills an empty SelectValue only after hydration). */}
               <SelectValue>{supplierOptions.find((o) => o.value === supplierId)?.label}</SelectValue>
             </SelectTrigger>
@@ -82,9 +83,11 @@ export function ProductForm({
           className="sm:col-span-2"
         />
       </FieldGroup>
-      <FormError message={state && !state.ok && !errors ? state.error : undefined} />
+      <FormError message={form.formError} />
       <div className="flex justify-end">
-        <SubmitButton size="lg">{submitLabel}</SubmitButton>
+        <SubmitButton size="lg" pending={form.pending}>
+          {submitLabel}
+        </SubmitButton>
       </div>
     </form>
   );

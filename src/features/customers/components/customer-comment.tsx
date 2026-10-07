@@ -1,13 +1,13 @@
 "use client";
 
 import { CalendarPlus, MessageSquareText, Pencil } from "lucide-react";
-import { useRef, useState, useTransition } from "react";
-import { toast } from "sonner";
+import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
+import { useServerAction } from "@/hooks/use-server-action";
 import { todayIso } from "@/lib/dates";
 import { cn } from "@/lib/utils";
 
@@ -36,19 +36,10 @@ export function CustomerComment({
 }) {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState(comment);
-  const [pending, startTransition] = useTransition();
+  const { run, pending } = useServerAction();
   const ref = useRef<HTMLTextAreaElement>(null);
 
-  const save = () =>
-    startTransition(async () => {
-      const result = await setCustomerCommentAction(storeId, customerId, value);
-      if (!result.ok) {
-        toast.error(result.error);
-        return;
-      }
-      toast.success("კომენტარი შენახულია");
-      setOpen(false);
-    });
+  const save = () => run(() => setCustomerCommentAction(storeId, customerId, value), { onSuccess: () => setOpen(false) });
 
   const stamp = () => {
     const next = datePrefix() + value;
@@ -94,6 +85,7 @@ export function CustomerComment({
             onChange={(e) => setValue(e.target.value)}
             rows={6}
             placeholder="კომენტარი…"
+            aria-label="კომენტარი"
             className="resize-y"
             autoFocus
           />

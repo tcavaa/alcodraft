@@ -3,10 +3,10 @@ import "server-only";
 import { and, asc, count, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 
 import { db } from "@/server/db";
+import { cashSumOrZero, debtSum } from "@/server/db/expressions";
 import { customers, deliveries, financeAccounts, financeEntries, orders, products } from "@/server/db/schema";
 
 /** Σ(total − paid + correction) — a customer's debt, the old `darchenili`. */
-export const debtExpr = sql<string>`sum(${deliveries.totalAmount} - ${deliveries.paidAmount} + ${deliveries.adjustmentAmount})`;
 
 export interface StoreKpis {
   todayCount: number;
@@ -39,7 +39,7 @@ export async function getStoreKpis(storeIds: number[], today: string): Promise<M
   const monthStart = `${today.slice(0, 7)}-01`;
 
   const perCustomer = db
-    .select({ storeId: deliveries.storeId, debt: debtExpr.as("debt") })
+    .select({ storeId: deliveries.storeId, debt: debtSum.as("debt") })
     .from(deliveries)
     .innerJoin(customers, eq(customers.id, deliveries.customerId))
     .where(and(inArray(deliveries.storeId, storeIds), eq(customers.isArchived, false)))
@@ -70,7 +70,7 @@ export async function getStoreKpis(storeIds: number[], today: string): Promise<M
     db
       .select({
         storeId: financeAccounts.storeId,
-        balance: sql<string>`coalesce(sum(${financeEntries.amountIn} - ${financeEntries.amountOut} + ${financeEntries.adjustmentAmount}), 0)`,
+        balance: cashSumOrZero,
       })
       .from(financeAccounts)
       .leftJoin(financeEntries, eq(financeEntries.accountId, financeAccounts.id))
@@ -134,7 +134,7 @@ export async function getRecentDeliveries(storeId: number, limit = 8) {
 }
 
 export async function getTopDebtors(storeId: number, limit = 6) {
-  const debt = debtExpr;
+  const debt = debtSum;
   return db
     .select({ id: customers.id, name: customers.name, color: customers.color, debt })
     .from(deliveries)

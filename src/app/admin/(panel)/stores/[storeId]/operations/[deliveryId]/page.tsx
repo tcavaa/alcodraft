@@ -1,31 +1,29 @@
-import { CheckCircle2, ClipboardList, Pencil, Wallet } from "lucide-react";
+import { ClipboardList, Pencil, Wallet } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { SortableHead } from "@/components/data/sortable-head";
+import { DocumentLinesTable, sortLineRows } from "@/components/data/document-lines-table";
+import { InfoList, InfoRow } from "@/components/info-list";
 import { Money } from "@/components/money";
+import { Notice } from "@/components/notice";
 import { PageHeader } from "@/components/page-header";
 import { PrintButton } from "@/components/print-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableFooter, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { DeleteOperationButton } from "@/features/sales/components/delete-operation-button";
 import { OPERATION_KIND_LABEL, operationKind, UPLOAD_STATUS_LABEL } from "@/features/sales/labels";
 import { leftoverValue, paymentLabel } from "@/features/sales/logic";
 import { getOperation } from "@/features/sales/queries";
 import { formatDate, formatDateTime } from "@/lib/dates";
-import { dec, formatAmount, formatDiscount, formatQty } from "@/lib/money";
+import { dec, formatAmount, formatDiscount } from "@/lib/money";
 import { storeHref } from "@/lib/routes";
-import { param, sortParam } from "@/lib/search-params";
-import { sortRows } from "@/lib/sort";
+import { idParam, param } from "@/lib/search-params";
 import { requireStore } from "@/server/auth/dal";
 
 export const metadata: Metadata = { title: "ოპერაცია" };
-
-const LINE_SORTS = ["name", "price", "quantity", "leftover", "remaining", "gift", "total"] as const;
 
 export default async function OperationPage({
   params,
@@ -33,22 +31,40 @@ export default async function OperationPage({
 }: PageProps<"/admin/stores/[storeId]/operations/[deliveryId]">) {
   const { storeId, deliveryId } = await params;
   const { store, user } = await requireStore(storeId);
-  const op = await getOperation(store.id, Number(deliveryId));
+  const op = await getOperation(store.id, idParam(deliveryId));
   if (!op) notFound();
   const sp = await searchParams;
   const { delivery: d, customer } = op;
-  const items = sortRows(op.items, sortParam(sp, LINE_SORTS), {
-    name: (i) => i.name,
-    price: (i) => dec(i.unitPrice),
-    quantity: (i) => i.quantity,
-    leftover: (i) => i.leftoverQty,
-    remaining: (i) => i.quantity - i.leftoverQty,
-    gift: (i) => i.giftQty,
-    total: (i) => dec(i.lineTotal),
-  });
+  const factor = d.discountFactor ? dec(d.discountFactor) : dec(1);
+  const rows = sortLineRows(
+    op.items.map((i) => {
+      // Old view painted the price red when it differed from the product's current price.
+      const expected = dec(i.currentPrice).times(factor);
+      const differs = !dec(i.unitPrice).equals(expected) && !dec(i.unitPrice).equals(i.currentPrice);
+      return {
+        key: i.id,
+        name: i.name,
+        nameExtra: i.productArchived ? <span className="ml-2 text-xs text-muted-foreground">(არქივი)</span> : null,
+        unitPrice: i.unitPrice,
+        priceCell: differs ? (
+          <Tooltip>
+            <TooltipTrigger className="cursor-help text-warning underline decoration-dotted underline-offset-4">
+              {formatAmount(i.unitPrice)}
+            </TooltipTrigger>
+            <TooltipContent>მიმდინარე ფასი: {formatAmount(i.currentPrice)} ₾</TooltipContent>
+          </Tooltip>
+        ) : undefined,
+        quantity: i.quantity,
+        leftover: i.leftoverQty,
+        gift: i.giftQty,
+        total: i.lineTotal,
+      };
+    }),
+    sp,
+  );
   const kind = operationKind({ kind: d.kind, total: d.totalAmount, paid: d.paidAmount });
   const debtBefore = dec(op.debtAfter).minus(d.totalAmount).plus(d.paidAmount).minus(d.adjustmentAmount);
-  const factor = d.discountFactor ? dec(d.discountFactor) : dec(1);
+  const cash = op.cash[0] ? dec(op.cash[0].amountIn).minus(op.cash[0].amountOut) : null;
   const notice = param(sp, "created")
     ? "ოპერაცია შენახულია."
     : param(sp, "fromOrder")
@@ -94,20 +110,17 @@ export default async function OperationPage({
                 deliveryId={d.id}
                 customerId={customer.id}
                 number={d.number}
+                kind={d.kind}
                 hasLinkedCash={op.cash.length > 0}
                 paid={d.paidAmount}
+                adjustment={d.adjustmentAmount}
               />
             ) : null}
           </>
         }
       />
 
-      {notice ? (
-        <div className="mb-5 flex items-center gap-2 rounded-xl border border-success/30 bg-success/10 px-4 py-3 text-sm text-success print:hidden">
-          <CheckCircle2 className="size-4" />
-          {notice}
-        </div>
-      ) : null}
+      {notice ? <Notice>{notice}</Notice> : null}
 
       <div className="grid items-start gap-6 2xl:grid-cols-[minmax(0,1fr)_22rem]">
         {d.kind === "adjustment" ? (
@@ -124,99 +137,7 @@ export default async function OperationPage({
             </CardContent>
           </Card>
         ) : (
-          <div className="overflow-hidden rounded-xl border bg-card">
-            <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/40 hover:bg-muted/40">
-                  <SortableHead column="name">
-                    დასახელება
-                  </SortableHead>
-                  <SortableHead column="price" className="text-right">
-                    ფასი
-                  </SortableHead>
-                  <SortableHead column="quantity" className="text-right">
-                    შეტანილი
-                  </SortableHead>
-                  <SortableHead column="leftover" className="text-right">
-                    ნაშთი
-                  </SortableHead>
-                  <SortableHead column="remaining" className="text-right">
-                    დარჩენილი
-                  </SortableHead>
-                  <SortableHead column="gift" className="text-right">
-                    საჩუქარი
-                  </SortableHead>
-                  <SortableHead column="total" className="text-right">
-                    ფასი ჯამში
-                  </SortableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {items.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
-                      პროდუქცია არ არის — მხოლოდ თანხის მიღება.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  items.map((i) => {
-                    // Old view painted the price red when it differed from the product's current price.
-                    const expected = dec(i.currentPrice).times(factor);
-                    const differs = !dec(i.unitPrice).equals(expected) && !dec(i.unitPrice).equals(i.currentPrice);
-                    return (
-                      <TableRow key={i.id}>
-                        <TableCell className="font-medium">
-                          {i.name}
-                          {i.productArchived ? <span className="ml-2 text-xs text-muted-foreground">(არქივი)</span> : null}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {differs ? (
-                            <Tooltip>
-                              <TooltipTrigger className="cursor-help text-warning underline decoration-dotted underline-offset-4">
-                                {formatAmount(i.unitPrice)}
-                              </TooltipTrigger>
-                              <TooltipContent>მიმდინარე ფასი: {formatAmount(i.currentPrice)} ₾</TooltipContent>
-                            </Tooltip>
-                          ) : (
-                            <Money value={i.unitPrice} />
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right tabular-nums">{formatQty(i.quantity)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{formatQty(i.leftoverQty)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{formatQty(i.quantity - i.leftoverQty)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{i.giftQty ? formatQty(i.giftQty) : "—"}</TableCell>
-                        <TableCell className="text-right font-medium">
-                          <Money value={i.lineTotal} />
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-              {items.length ? (
-                <TableFooter>
-                  <TableRow className="hover:bg-transparent">
-                    <TableCell colSpan={2}>ჯამში</TableCell>
-                    <TableCell className="text-right font-semibold tabular-nums">
-                      {formatQty(items.reduce((a, i) => a + i.quantity, 0))}
-                    </TableCell>
-                    <TableCell className="text-right font-semibold tabular-nums">
-                      {formatQty(items.reduce((a, i) => a + i.leftoverQty, 0))}
-                    </TableCell>
-                    <TableCell className="text-right font-semibold tabular-nums">
-                      {formatQty(items.reduce((a, i) => a + i.quantity - i.leftoverQty, 0))}
-                    </TableCell>
-                    <TableCell className="text-right font-semibold tabular-nums">
-                      {formatQty(items.reduce((a, i) => a + i.giftQty, 0))}
-                    </TableCell>
-                    <TableCell className="text-right font-semibold">
-                      <Money value={d.totalAmount} currency />
-                    </TableCell>
-                  </TableRow>
-                </TableFooter>
-              ) : null}
-            </Table>
-          </div>
+          <DocumentLinesTable rows={rows} total={d.totalAmount} empty="პროდუქცია არ არის — მხოლოდ თანხის მიღება." />
         )}
 
         <div className="grid items-start gap-4 md:grid-cols-2 2xl:grid-cols-1">
@@ -225,32 +146,32 @@ export default async function OperationPage({
               <CardTitle className="text-base">ინფორმაცია</CardTitle>
             </CardHeader>
             <CardContent>
-              <dl className="space-y-2.5 text-sm">
-                <Row label="სულ ჯამში">
+              <InfoList>
+                <InfoRow label="სულ ჯამში">
                   <Money value={d.totalAmount} currency className="font-semibold" />
-                </Row>
-                <Row label="აღებული თანხა">
+                </InfoRow>
+                <InfoRow label="აღებული თანხა">
                   <Money value={d.paidAmount} currency />
-                </Row>
-                <Row label="გადახდის მეთოდი">{d.kind === "adjustment" ? "—" : paymentLabel(d.paymentMethod)}</Row>
-                <Row label="წინა ვალი">
+                </InfoRow>
+                <InfoRow label="გადახდის მეთოდი">{d.kind === "adjustment" ? "—" : paymentLabel(d.paymentMethod)}</InfoRow>
+                <InfoRow label="წინა ვალი">
                   <Money value={debtBefore} tone="debt" />
-                </Row>
-                <Row label="დარჩენილი">
+                </InfoRow>
+                <InfoRow label="დარჩენილი">
                   <Money value={op.debtAfter} currency tone="debt" className="text-base font-semibold" />
-                </Row>
+                </InfoRow>
                 {!dec(d.adjustmentAmount).isZero() && d.kind === "delivery" ? (
-                  <Row label="კორექტირება (ძველი სისტემიდან)">
+                  <InfoRow label="კორექტირება (ძველი სისტემიდან)">
                     <Money value={d.adjustmentAmount} />
-                  </Row>
+                  </InfoRow>
                 ) : null}
-                <Row label="ზედნადები">{d.hasWaybill === null ? "—" : d.hasWaybill ? "კი" : "არა"}</Row>
-                <Row label="ფასდაკლება">{formatDiscount(d.discountFactor) || "არა"}</Row>
-                {d.uploadStatus ? <Row label="სტატუსი (RS)">{UPLOAD_STATUS_LABEL[d.uploadStatus]}</Row> : null}
-                <Row label="ნაშთი (ღირებულება)">
-                  <Money value={leftoverValue(items)} />
-                </Row>
-              </dl>
+                <InfoRow label="ზედნადები">{d.hasWaybill === null ? "—" : d.hasWaybill ? "კი" : "არა"}</InfoRow>
+                <InfoRow label="ფასდაკლება">{formatDiscount(d.discountFactor) || "არა"}</InfoRow>
+                {d.uploadStatus ? <InfoRow label="სტატუსი (RS)">{UPLOAD_STATUS_LABEL[d.uploadStatus]}</InfoRow> : null}
+                <InfoRow label="ნაშთი (ღირებულება)">
+                  <Money value={leftoverValue(op.items)} />
+                </InfoRow>
+              </InfoList>
             </CardContent>
           </Card>
 
@@ -264,12 +185,13 @@ export default async function OperationPage({
           ) : null}
 
           <div className="space-y-2 rounded-xl border bg-card/60 p-4 text-xs text-muted-foreground print:hidden">
-            {op.cash.length ? (
+            {cash ? (
               <p className="flex items-center gap-1.5">
                 <Wallet className="size-3.5" />
-                სალაროში: +{formatAmount(dec(op.cash[0].amountIn).minus(op.cash[0].amountOut))} ₾ ({formatDate(op.cash[0].date)})
+                სალაროში: {cash.isNegative() ? "" : "+"}
+                {formatAmount(cash)} ₾ ({formatDate(op.cash[0].date)})
               </p>
-            ) : Number(d.paidAmount) !== 0 && d.paymentMethod !== "back" ? (
+            ) : !dec(d.paidAmount).isZero() && d.paymentMethod !== "back" ? (
               <p className="flex items-center gap-1.5">
                 <Wallet className="size-3.5" />
                 სალაროს ჩანაწერი ძველ სისტემაშია (მიუბმელი).
@@ -294,14 +216,5 @@ export default async function OperationPage({
         </div>
       </div>
     </>
-  );
-}
-
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-baseline justify-between gap-4">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="text-right">{children}</dd>
-    </div>
   );
 }

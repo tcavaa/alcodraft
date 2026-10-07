@@ -1,10 +1,11 @@
-import { CheckCircle2 } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SortableHead } from "@/components/data/sortable-head";
+import { HeadRow, TableCard } from "@/components/data/table-card";
 import { Money } from "@/components/money";
+import { Notice } from "@/components/notice";
 import { PageHeader } from "@/components/page-header";
 import { PrintButton } from "@/components/print-button";
 import { Table, TableBody, TableCell, TableFooter, TableHeader, TableRow } from "@/components/ui/table";
@@ -14,7 +15,7 @@ import { getReceipt } from "@/features/stock/queries";
 import { formatDate, formatDateTime } from "@/lib/dates";
 import { dec, formatAmount, formatQty, sum } from "@/lib/money";
 import { storeHref } from "@/lib/routes";
-import { param, sortParam } from "@/lib/search-params";
+import { idParam, param, sortParam } from "@/lib/search-params";
 import { sortRows } from "@/lib/sort";
 import { requireStore } from "@/server/auth/dal";
 
@@ -26,7 +27,7 @@ const SORTS = ["name", "before", "cost", "added", "after", "value"] as const;
 export default async function ReceiptPage({ params, searchParams }: PageProps<"/admin/stores/[storeId]/stock/[receiptId]">) {
   const { storeId, receiptId } = await params;
   const { store, user } = await requireStore(storeId);
-  const data = await getReceipt(store.id, Number(receiptId));
+  const data = await getReceipt(store.id, idParam(receiptId));
   if (!data) notFound();
   const sp = await searchParams;
   const { receipt: r } = data;
@@ -66,17 +67,12 @@ export default async function ReceiptPage({ params, searchParams }: PageProps<"/
           </>
         }
       />
-      {param(sp, "created") ? (
-        <div className="mb-5 flex items-center gap-2 rounded-xl border border-success/30 bg-success/10 px-4 py-3 text-sm text-success">
-          <CheckCircle2 className="size-4" />
-          მიღება შენახულია — მარაგი განახლდა.
-        </div>
-      ) : null}
+      {param(sp, "created") ? <Notice>მიღება შენახულია — მარაგი განახლდა.</Notice> : null}
       {r.comment ? <p className="mb-4 text-sm text-muted-foreground">კომენტარი: {r.comment}</p> : null}
-      <div className="overflow-hidden rounded-xl border bg-card">
+      <TableCard>
         <Table>
           <TableHeader>
-            <TableRow className="bg-muted/40 hover:bg-muted/40">
+            <HeadRow>
               <SortableHead column="name">დასახელება</SortableHead>
               <SortableHead column="before" className="text-right">
                 რაოდენობა
@@ -93,7 +89,7 @@ export default async function ReceiptPage({ params, searchParams }: PageProps<"/
               <SortableHead column="value" className="text-right">
                 ღირებულება
               </SortableHead>
-            </TableRow>
+            </HeadRow>
           </TableHeader>
           <TableBody>
             {items.map((i) => {
@@ -138,7 +134,7 @@ export default async function ReceiptPage({ params, searchParams }: PageProps<"/
             </TableRow>
           </TableFooter>
         </Table>
-      </div>
+      </TableCard>
       <p className="mt-3 text-xs text-muted-foreground">
         {r.createdById ? `${data.createdBy ?? "მომხმარებელი"} · ${formatDateTime(r.createdAt)}` : "გადმოტანილია ძველი სისტემიდან"}
       </p>

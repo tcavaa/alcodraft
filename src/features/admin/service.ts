@@ -220,3 +220,30 @@ export async function deleteUser(tx: Tx, actorId: number, userId: number) {
     summary: `წაიშალა მომხმარებელი: ${user.email}`,
   });
 }
+
+// ── My account ──────────────────────────────────────────────────────────────
+
+/** New own password: every other session of the user is signed out (`keepSessionId` = this one). */
+export async function changeOwnPassword(tx: Tx, userId: number, password: string, keepSessionId: string | null) {
+  await tx
+    .update(users)
+    .set({ passwordHash: await hashPassword(password), passwordScheme: "bcrypt", passwordChangedAt: new Date() })
+    .where(eq(users.id, userId));
+  await tx
+    .delete(sessions)
+    .where(and(eq(sessions.userId, userId), keepSessionId ? ne(sessions.id, keepSessionId) : undefined));
+  await audit(tx, { userId, action: "user.change_password", entityType: "user", entityId: userId, summary: "საკუთარი პაროლის შეცვლა" });
+}
+
+export async function updateOwnName(tx: Tx, userId: number, name: string) {
+  const user = await lockUser(tx, userId);
+  if (user.name === name) return;
+  await tx.update(users).set({ name }).where(eq(users.id, userId));
+  await audit(tx, {
+    userId,
+    action: "user.rename",
+    entityType: "user",
+    entityId: userId,
+    summary: `სახელი: ${user.name || "—"} → ${name || "—"}`,
+  });
+}

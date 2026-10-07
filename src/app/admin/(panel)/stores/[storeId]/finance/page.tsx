@@ -8,6 +8,7 @@ import { Pagination } from "@/components/data/pagination";
 import { ParamSelect } from "@/components/data/param-select";
 import { SearchInput } from "@/components/data/search-input";
 import { SortableHead } from "@/components/data/sortable-head";
+import { HeadRow, TableCard } from "@/components/data/table-card";
 import { EmptyState } from "@/components/empty-state";
 import { Money } from "@/components/money";
 import { PageHeader } from "@/components/page-header";
@@ -15,12 +16,12 @@ import { StatCard } from "@/components/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AddEntryDialog, EntryRowMenu, NewAccountButton } from "@/features/finance/components/finance-components";
+import { AddEntryDialog, EntryRowMenu, NewAccountButton, RenameAccountButton } from "@/features/finance/components/finance-components";
 import { ENTRY_SORTS, listAccounts, listEntries } from "@/features/finance/queries";
-import { formatDate, isIsoDate } from "@/lib/dates";
-import { dec } from "@/lib/money";
+import { formatDate } from "@/lib/dates";
+import { dec, formatAmount, formatQty } from "@/lib/money";
 import { storeHref } from "@/lib/routes";
-import { intParam, pageParam, param, sortParam } from "@/lib/search-params";
+import { dateRangeParam, enumParam, intParam, pageParam, param, sortParam } from "@/lib/search-params";
 import { requireStore } from "@/server/auth/dal";
 
 export const metadata: Metadata = { title: "სალარო" };
@@ -45,14 +46,11 @@ export default async function FinancePage({ params, searchParams }: PageProps<"/
   }
 
   const page = pageParam(sp);
-  const from = param(sp, "from");
-  const to = param(sp, "to");
-  const dir = param(sp, "dir");
+  const direction = enumParam(sp, "dir", ["in", "out"] as const);
   const list = await listEntries(account.id, {
     q: param(sp, "q"),
-    from: from && isIsoDate(from) ? from : undefined,
-    to: to && isIsoDate(to) ? to : undefined,
-    direction: dir === "in" || dir === "out" ? dir : undefined,
+    ...dateRangeParam(sp),
+    direction,
     sort: sortParam(sp, ENTRY_SORTS),
     page,
     pageSize: PAGE_SIZE,
@@ -85,10 +83,15 @@ export default async function FinancePage({ params, searchParams }: PageProps<"/
               searchParams={{}}
               param="account"
               value={String(account.id)}
-              options={accounts.map((a, i) => ({ value: i === 0 ? String(accounts[0].id) : String(a.id), label: a.name }))}
+              options={accounts.map((a) => ({ value: String(a.id), label: a.name }))}
             />
           ) : null}
-          {user.role === "super_admin" ? <NewAccountButton storeId={store.id} /> : null}
+          {user.role === "super_admin" ? (
+            <>
+              <RenameAccountButton storeId={store.id} accountId={account.id} name={account.name} />
+              <NewAccountButton storeId={store.id} />
+            </>
+          ) : null}
         </div>
       ) : null}
 
@@ -101,10 +104,10 @@ export default async function FinancePage({ params, searchParams }: PageProps<"/
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <SearchInput className="sm:w-72" placeholder="კომენტარის ძებნა…" />
         <DateRangeFilter />
-        <div className="flex flex-wrap gap-2 sm:ml-auto">
+        <div className="flex flex-wrap gap-2">
           <ParamSelect
             param="dir"
-            value={dir === "in" || dir === "out" ? dir : "all"}
+            value={direction ?? "all"}
             label="ტიპი"
             className="w-48"
             options={[
@@ -119,10 +122,10 @@ export default async function FinancePage({ params, searchParams }: PageProps<"/
       {list.rows.length === 0 ? (
         <EmptyState icon={Wallet} title="ჩანაწერები ვერ მოიძებნა" />
       ) : (
-        <div className="overflow-hidden rounded-xl border bg-card">
+        <TableCard>
           <Table>
             <TableHeader>
-              <TableRow className="bg-muted/40 hover:bg-muted/40">
+              <HeadRow>
                 <SortableHead column="date" first="desc">
                   თარიღი
                 </SortableHead>
@@ -137,7 +140,7 @@ export default async function FinancePage({ params, searchParams }: PageProps<"/
                 </SortableHead>
                 <SortableHead column="comment">კომენტარი</SortableHead>
                 <TableHead className="w-10" />
-              </TableRow>
+              </HeadRow>
             </TableHeader>
             <TableBody>
               {list.rows.map((e) => (
@@ -172,7 +175,7 @@ export default async function FinancePage({ params, searchParams }: PageProps<"/
                       ) : null}
                       {!dec(e.adjustment).isZero() ? (
                         <Badge variant="secondary" title="ძველ ბაზაში ხელით გასწორებული ბალანსი">
-                          კორ. {dec(e.adjustment).toString()}
+                          კორ. {formatAmount(e.adjustment)}
                         </Badge>
                       ) : null}
                     </div>
@@ -184,6 +187,8 @@ export default async function FinancePage({ params, searchParams }: PageProps<"/
                       entryId={e.id}
                       description={e.description}
                       note={e.note}
+                      adjustment={e.adjustment}
+                      hasAmounts={!dec(e.amountIn).isZero() || !dec(e.amountOut).isZero()}
                       canDelete={user.role === "super_admin"}
                       locked={Boolean(e.deliveryId)}
                     />
@@ -193,7 +198,7 @@ export default async function FinancePage({ params, searchParams }: PageProps<"/
             </TableBody>
             <TableFooter>
               <TableRow className="hover:bg-transparent">
-                <TableCell>სულ ({list.count})</TableCell>
+                <TableCell>სულ ({formatQty(list.count)})</TableCell>
                 <TableCell className="text-right font-semibold">
                   <Money value={list.totalOut} />
                 </TableCell>
@@ -207,7 +212,7 @@ export default async function FinancePage({ params, searchParams }: PageProps<"/
               </TableRow>
             </TableFooter>
           </Table>
-        </div>
+        </TableCard>
       )}
       <Pagination page={page} pageSize={PAGE_SIZE} total={list.count} pathname={pathname} searchParams={sp} />
     </>

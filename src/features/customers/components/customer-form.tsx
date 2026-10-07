@@ -1,10 +1,9 @@
 "use client";
 
-import { useActionState } from "react";
-
 import { FormError, TextField } from "@/components/forms/fields";
 import { SubmitButton } from "@/components/forms/submit-button";
 import { FieldGroup } from "@/components/ui/field";
+import { useActionForm } from "@/hooks/use-action-form";
 import type { ActionResult } from "@/lib/action-result";
 
 export interface CustomerFormValues {
@@ -25,11 +24,11 @@ export function CustomerForm({
   defaults?: Partial<CustomerFormValues>;
   submitLabel: string;
 }) {
-  const [state, formAction] = useActionState(action, undefined);
-  const errors = state && !state.ok ? state.fieldErrors : undefined;
+  const form = useActionForm(action);
+  const errors = form.errors;
 
   return (
-    <form action={formAction} className="space-y-6">
+    <form onSubmit={form.onSubmit} className="space-y-6">
       <FieldGroup className="grid gap-5 sm:grid-cols-2">
         <TextField
           label="დასახელება"
@@ -51,9 +50,11 @@ export function CustomerForm({
           className="sm:col-span-2"
         />
       </FieldGroup>
-      <FormError message={state && !state.ok && !errors ? state.error : undefined} />
+      <FormError message={form.formError} />
       <div className="flex justify-end">
-        <SubmitButton size="lg">{submitLabel}</SubmitButton>
+        <SubmitButton size="lg" pending={form.pending}>
+          {submitLabel}
+        </SubmitButton>
       </div>
     </form>
   );

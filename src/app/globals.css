@@ -175,6 +175,14 @@
   input[inputmode="numeric"] {
     font-variant-numeric: tabular-nums;
   }
+  /* Empty date filters (DateRangeFilter shows a label instead): hide the browser's placeholder
+     date — Safari draws today's date there in grey, which reads like an active filter. */
+  input[type="date"][data-empty="true"]:not(:focus) {
+    color: transparent;
+  }
+  input[type="date"][data-empty="true"]:not(:focus)::-webkit-datetime-edit {
+    visibility: hidden;
+  }
 }
 
 @layer utilities {

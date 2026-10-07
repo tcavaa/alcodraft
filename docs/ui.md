@@ -22,9 +22,11 @@ Defined in `src/app/globals.css` (`:root` and `.dark`). Light/dark/system via th
 ## Page patterns
 
 - `PageHeader` (eyebrow = store name, title, description, actions on the right; optional back link).
-- Lists: toolbar (`SearchInput`, `FilterTabs` for active/„სანაგვე“, `ParamSelect`, `DateRangeFilter`,
-  `ParamCombobox` for long lists such as the „კლიენტი“ filter on operations and orders)
-  → card table with `TableFooter` totals → `Pagination`. Filters live in the URL (shareable, back works).
+- Lists: toolbar (`SearchInput`, `ArchivedTabs` for active/„სანაგვე“, `ParamSelect`, `DateRangeFilter`,
+  `CustomerFilter` / `ParamCombobox` for long lists) → `TableCard` with a `HeadRow` and `TableFooter`
+  totals → `Pagination`. Filters live in the URL (shareable, back works). Toolbars wrap from the left
+  (no `ml-auto` on a group that can wrap). `ParamSelect` keeps „label: value“ together on the left.
+  Empty date fields show „დან“ / „მდე“ instead of the browser's placeholder date.
 - **Every data table sorts by clicking a header** (`SortableHead`): first click → ↑ for text (A→Z) or ↓ for
   numbers and dates (biggest / newest first), second click → the other direction, third → the table's
   default order. Only the sorted column shows its gold arrow (no reserved space, so widths don't change).
@@ -35,18 +37,22 @@ Defined in `src/app/globals.css` (`:root` and `.dark`). Light/dark/system via th
   `td` ignores `max-width`, so text would spill into the next column.
 - Row actions: `RowMenu` ("⋯") with confirmations in a dialog; quick inline edits (comment popovers,
   colour dot, RS status pill) update optimistically.
-- Documents (operation, order, receipt): line table + info card on the right; `PrintButton`.
+- Documents (operation, order, receipt): line table (`DocumentLinesTable`) + info card (`InfoRow`) on
+  the right; `PrintButton`. Success banners: `Notice`. New/edit pages: `FormPage`.
 - Big forms (operation/order/receipt): product grid with search, "only filled" toggle, keyboard
   navigation (Enter/↓/↑ move within a column), sticky summary panel with live totals and debt preview,
-  confirmation dialog before saving.
+  confirmation dialog before saving. Edits show saved line totals for untouched products. An open
+  order is completed or cancelled from its edit form (unsaved changes → „შენახვა და დასრულება“).
+- Money forms (supplier payment, wages, receipts, edits) confirm with the amount before saving.
 - Every route has a skeleton (`loading.tsx` → `PageSkeleton`), so navigation is instant.
 - ⌘K / Ctrl+K: command palette — search customers, products, suppliers of the current store, jump to pages.
 
 ## Components
 
 shadcn/ui ("radix-nova" preset) in `src/components/ui` — regenerate/add with `npx shadcn@latest add <name>`.
-App-level shared components in `src/components` (`money.tsx`, `stat-card.tsx`, `row-menu.tsx`,
-`confirm-action.tsx`, `forms/*`, `data/*`, `layout/*`).
+App-level shared components in `src/components` (`money.tsx`, `stat-card.tsx`, `row-menu.tsx` incl.
+`archiveMenuItems`, `confirm-dialog.tsx`, `confirm-action.tsx`, `notice.tsx`, `info-list.tsx`,
+`form-page.tsx`, `error-view.tsx`, `forms/*`, `data/*`, `layout/*`).
 
 ## Language
 

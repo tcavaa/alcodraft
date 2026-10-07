@@ -5,6 +5,7 @@ import { Pagination } from "@/components/data/pagination";
 import { ParamSelect } from "@/components/data/param-select";
 import { SearchInput } from "@/components/data/search-input";
 import { SortableHead } from "@/components/data/sortable-head";
+import { HeadRow, TableCard } from "@/components/data/table-card";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
@@ -53,10 +54,10 @@ export default async function AuditPage({ searchParams }: PageProps<"/admin/sett
       {list.rows.length === 0 ? (
         <EmptyState icon={ScrollText} title="ჩანაწერები არ არის" />
       ) : (
-        <div className="overflow-hidden rounded-xl border bg-card">
+        <TableCard>
           <Table>
             <TableHeader>
-              <TableRow className="bg-muted/40 hover:bg-muted/40">
+              <HeadRow>
                 <SortableHead column="time" first="desc">
                   დრო
                 </SortableHead>
@@ -65,7 +66,7 @@ export default async function AuditPage({ searchParams }: PageProps<"/admin/sett
                   მაღაზია
                 </SortableHead>
                 <SortableHead column="action">მოქმედება</SortableHead>
-              </TableRow>
+              </HeadRow>
             </TableHeader>
             <TableBody>
               {list.rows.map((r) => (
@@ -81,7 +82,7 @@ export default async function AuditPage({ searchParams }: PageProps<"/admin/sett
               ))}
             </TableBody>
           </Table>
-        </div>
+        </TableCard>
       )}
       <Pagination page={page} pageSize={PAGE_SIZE} total={list.total} pathname="/admin/settings/audit" searchParams={sp} />
     </>

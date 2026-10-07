@@ -4,11 +4,11 @@ import Link from "next/link";
 
 import { FilterTabs } from "@/components/data/filter-tabs";
 import { Pagination } from "@/components/data/pagination";
-import { ParamCombobox } from "@/components/data/param-combobox";
 import { SearchInput } from "@/components/data/search-input";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
+import { CustomerFilter } from "@/features/sales/components/customer-filter";
 import { OrdersTable } from "@/features/sales/components/orders-table";
 import { listCustomerFilterOptions, listOrders, ORDER_SORTS } from "@/features/sales/queries";
 import { storeHref } from "@/lib/routes";
@@ -66,20 +66,7 @@ export default async function OrdersPage({ params, searchParams }: PageProps<"/a
             { value: "history", label: "ჩახურული შეკვეთები" },
           ]}
         />
-        <ParamCombobox
-          param="customer"
-          value={customerId ? String(customerId) : undefined}
-          label="კლიენტი"
-          placeholder="კლიენტის ძებნა…"
-          emptyText="კლიენტი ვერ მოიძებნა."
-          className="w-64 sm:ml-auto"
-          options={customerOptions.map((c) => ({
-            value: String(c.id),
-            label: c.name,
-            hint: [c.address, c.isArchived ? "სანაგვე" : ""].filter(Boolean).join(" · ") || undefined,
-            muted: c.isArchived,
-          }))}
-        />
+        <CustomerFilter options={customerOptions} value={customerId} className="w-64 sm:ml-auto" />
       </div>
       {list.rows.length === 0 ? (
         <EmptyState

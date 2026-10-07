@@ -1,8 +1,8 @@
 "use client";
 
-import { Archive, ArchiveRestore, Pencil, Trash2 } from "lucide-react";
+import { Pencil } from "lucide-react";
 
-import { RowMenu, type RowMenuItem } from "@/components/row-menu";
+import { archiveMenuItems, RowMenu } from "@/components/row-menu";
 import { storeHref } from "@/lib/routes";
 
 import { deleteProductAction, setProductArchivedAction } from "../actions";
@@ -20,36 +20,26 @@ export function ProductRowMenu({
   archived: boolean;
   canDelete: boolean;
 }) {
-  const items: RowMenuItem[] = [
-    { type: "link", label: "რედაქტირება", href: storeHref(storeId, `products/${productId}`), icon: <Pencil /> },
-    { type: "separator" },
-    archived
-      ? { type: "action", label: "აღდგენა", icon: <ArchiveRestore />, run: () => setProductArchivedAction(storeId, productId, false) }
-      : {
-          type: "action",
-          label: "სანაგვეში გადატანა",
-          icon: <Archive />,
-          run: () => setProductArchivedAction(storeId, productId, true),
-          confirm: {
-            title: `${name} — სანაგვეში გადატანა?`,
-            description: "პროდუქტი აღარ გამოჩნდება ოპერაციის ფორმაში. ისტორია შენარჩუნდება.",
-            confirmLabel: "გადატანა",
-          },
-        },
-  ];
-  if (archived && canDelete) {
-    items.push({
-      type: "action",
-      label: "სამუდამოდ წაშლა",
-      icon: <Trash2 />,
-      destructive: true,
-      run: () => deleteProductAction(storeId, productId),
-      confirm: {
-        title: `${name} — სამუდამოდ წაშლა?`,
-        description: "წაიშლება მხოლოდ თუ პროდუქტი არცერთ ოპერაციაში, შეკვეთასა თუ მიღებაში არ ფიგურირებს.",
-        confirmLabel: "წაშლა",
-      },
-    });
-  }
-  return <RowMenu items={items} />;
+  return (
+    <RowMenu
+      label={`${name} — მოქმედებები`}
+      items={[
+        { type: "link", label: "რედაქტირება", href: storeHref(storeId, `products/${productId}`), icon: <Pencil /> },
+        { type: "separator" },
+        ...archiveMenuItems({
+          name,
+          archived,
+          archive: () => setProductArchivedAction(storeId, productId, true),
+          restore: () => setProductArchivedAction(storeId, productId, false),
+          archiveDescription: "პროდუქტი აღარ გამოჩნდება ოპერაციის ფორმაში. ისტორია შენარჩუნდება.",
+          remove: canDelete
+            ? {
+                run: () => deleteProductAction(storeId, productId),
+                description: "წაიშლება მხოლოდ თუ პროდუქტი არცერთ ოპერაციაში, შეკვეთასა თუ მიღებაში არ ფიგურირებს.",
+              }
+            : undefined,
+        }),
+      ]}
+    />
+  );
 }

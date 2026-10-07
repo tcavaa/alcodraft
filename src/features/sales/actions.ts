@@ -5,10 +5,11 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { storeHref } from "@/lib/routes";
-import { amount, id, text, wholeNumber } from "@/lib/validation";
-import { ActionError, fieldErrorsFrom, runAction } from "@/server/action";
+import { amount, id, reason, requestId, text, wholeNumber } from "@/lib/validation";
+import { parseInput, runAction } from "@/server/action";
 import { authorizeStore } from "@/server/auth/dal";
 import { db } from "@/server/db";
+import { once } from "@/server/db/once";
 
 import { DISCOUNT_OPTIONS } from "./logic";
 import {
@@ -25,6 +26,7 @@ import {
 
 const factors = DISCOUNT_OPTIONS.map((o) => o.factor) as [string, ...string[]];
 const method = z.enum(["cash", "card", "back"], { error: "აირჩიეთ გადახდის მეთოდი" });
+const uploadStatus = z.enum(["pending", "uploaded"]);
 
 const entryLine = z.object({
   productId: id,
@@ -43,6 +45,7 @@ const finalLine = z.object({
 });
 
 const deliverySchema = z.object({
+  requestId,
   customerId: id,
   lines: z.array(entryLine).max(2000),
   discountFactor: z.enum(factors),
@@ -52,11 +55,14 @@ const deliverySchema = z.object({
   comment: text(5000),
 });
 
-function parse<T extends z.ZodType>(schema: T, input: unknown): z.output<T> {
-  const parsed = schema.safeParse(input);
-  if (!parsed.success) throw new ActionError("შეასწორეთ მონიშნული ველები.", fieldErrorsFrom(parsed.error));
-  return parsed.data;
-}
+/** An edit keeps an imported document's empty method/waybill unless the user sets one. */
+const documentEditSchema = z.object({
+  lines: z.array(finalLine).max(2000),
+  paidAmount: amount({ allowNegative: true }),
+  paymentMethod: method.nullable(),
+  hasWaybill: z.boolean().nullable(),
+  comment: text(5000),
+});
 
 // ── Operations ──────────────────────────────────────────────────────────────
 
@@ -65,101 +71,91 @@ export type DeliveryPayload = z.input<typeof deliverySchema>;
 export async function createDeliveryAction(storeId: number, payload: DeliveryPayload) {
   return runAction(async () => {
     const { actor } = await authorizeStore(storeId);
-    const data = parse(deliverySchema, payload);
-    const created = await db.transaction((tx) =>
-      createDelivery(tx, actor, {
-        ...data,
-        lines: data.lines.map((l) => ({ ...l, price: l.price })),
-      }),
+    const data = parseInput(deliverySchema, payload);
+    const created = await once(db, { key: data.requestId, action: "delivery.create", userId: actor.userId }, (tx) =>
+      createDelivery(tx, actor, data),
     );
     redirect(`${storeHref(storeId, `operations/${created.id}`)}?created=1`);
   });
 }
 
-const deliveryEditSchema = z.object({
-  lines: z.array(finalLine).max(2000),
-  paidAmount: amount({ allowNegative: true }),
-  paymentMethod: method,
-  hasWaybill: z.boolean().nullable(),
-  comment: text(5000),
-});
-export type DeliveryEditPayload = z.input<typeof deliveryEditSchema>;
+export type DocumentEditPayload = z.input<typeof documentEditSchema>;
 
-export async function updateDeliveryAction(storeId: number, deliveryId: number, payload: DeliveryEditPayload) {
+export async function updateDeliveryAction(storeId: number, deliveryId: number, payload: DocumentEditPayload) {
   return runAction(async () => {
     const { actor } = await authorizeStore(storeId);
-    const data = parse(deliveryEditSchema, payload);
-    await db.transaction((tx) =>
-      updateDelivery(tx, actor, deliveryId, {
-        ...data,
-        lines: data.lines.map((l) => ({ ...l, unitPrice: l.unitPrice.toFixed(4) })),
-      }),
-    );
+    const data = parseInput(documentEditSchema, payload);
+    await db.transaction((tx) => updateDelivery(tx, actor, deliveryId, data));
     redirect(`${storeHref(storeId, `operations/${deliveryId}`)}?updated=1`);
   });
 }
 
-export async function deleteDeliveryAction(storeId: number, deliveryId: number, customerId: number) {
+export async function deleteDeliveryAction(
+  storeId: number,
+  deliveryId: number,
+  customerId: number,
+  expectedKind: "delivery" | "adjustment",
+) {
   return runAction(async () => {
     const { actor } = await authorizeStore(storeId, { superAdminOnly: true });
-    await db.transaction((tx) => deleteDelivery(tx, actor, deliveryId));
+    const kind = parseInput(z.enum(["delivery", "adjustment"]), expectedKind);
+    await db.transaction((tx) => deleteDelivery(tx, actor, deliveryId, kind));
     redirect(storeHref(storeId, `customers/${customerId}`));
   });
 }
 
 const adjustmentSchema = z.object({
+  requestId,
   customerId: id,
   amount: amount({ required: true, allowNegative: true }),
-  comment: z
-    .string()
-    .transform((v) => v.trim())
-    .pipe(z.string().min(3, "მიუთითეთ მიზეზი").max(2000)),
+  comment: reason(),
 });
 
 export async function adjustDebtAction(storeId: number, payload: z.input<typeof adjustmentSchema>) {
   return runAction(async () => {
     const { actor } = await authorizeStore(storeId);
-    const data = parse(adjustmentSchema, payload);
-    await db.transaction((tx) => createDebtAdjustment(tx, actor, data));
+    const data = parseInput(adjustmentSchema, payload);
+    await once(db, { key: data.requestId, action: "delivery.adjust_debt", userId: actor.userId }, (tx) =>
+      createDebtAdjustment(tx, actor, data),
+    );
     refresh();
   }, "ვალი დაკორექტირდა");
 }
 
 // ── Orders ──────────────────────────────────────────────────────────────────
 
-const orderSchema = deliverySchema.extend({ uploadStatus: z.enum(["pending", "uploaded"]) });
+const orderSchema = deliverySchema.extend({ uploadStatus });
 export type OrderPayload = z.input<typeof orderSchema>;
 
 export async function createOrderAction(storeId: number, payload: OrderPayload) {
   return runAction(async () => {
     const { actor } = await authorizeStore(storeId);
-    const data = parse(orderSchema, payload);
-    const created = await db.transaction((tx) => createOrder(tx, actor, data));
+    const data = parseInput(orderSchema, payload);
+    const created = await once(db, { key: data.requestId, action: "order.create", userId: actor.userId }, (tx) =>
+      createOrder(tx, actor, data),
+    );
     redirect(`${storeHref(storeId, `orders/${created.id}`)}?created=1`);
   });
 }
 
-const orderEditSchema = deliveryEditSchema.extend({ uploadStatus: z.enum(["pending", "uploaded"]).nullable() });
+const orderEditSchema = documentEditSchema.extend({ uploadStatus: uploadStatus.nullable() });
 export type OrderEditPayload = z.input<typeof orderEditSchema>;
 
 export async function updateOrderAction(storeId: number, orderId: number, payload: OrderEditPayload) {
   return runAction(async () => {
     const { actor } = await authorizeStore(storeId);
-    const data = parse(orderEditSchema, payload);
-    await db.transaction((tx) =>
-      updateOrder(tx, actor, orderId, {
-        ...data,
-        lines: data.lines.map((l) => ({ ...l, unitPrice: l.unitPrice.toFixed(4) })),
-      }),
-    );
+    const data = parseInput(orderEditSchema, payload);
+    await db.transaction((tx) => updateOrder(tx, actor, orderId, data));
     refresh();
   }, "შეკვეთა შენახულია");
 }
 
-export async function completeOrderAction(storeId: number, orderId: number) {
+/** `edit` = the form's unsaved changes, saved in the same transaction before completing. */
+export async function completeOrderAction(storeId: number, orderId: number, edit: OrderEditPayload | null) {
   return runAction(async () => {
     const { actor } = await authorizeStore(storeId);
-    const created = await db.transaction((tx) => completeOrder(tx, actor, orderId));
+    const changes = edit ? parseInput(orderEditSchema, edit) : undefined;
+    const created = await db.transaction((tx) => completeOrder(tx, actor, orderId, changes));
     redirect(`${storeHref(storeId, `operations/${created.id}`)}?fromOrder=1`);
   });
 }
@@ -173,20 +169,19 @@ export async function cancelOrderAction(storeId: number, orderId: number) {
 }
 
 const quickSchema = z.object({
-  uploadStatus: z.enum(["pending", "uploaded"]).nullable().optional(),
-  comment: z.string().max(5000).optional(),
+  uploadStatus: uploadStatus.nullable().optional(),
+  comment: z
+    .string()
+    .max(5000, "კომენტარი ძალიან გრძელია")
+    .transform((v) => v.trim())
+    .optional(),
 });
 
 export async function setOrderQuickAction(storeId: number, orderId: number, fields: z.input<typeof quickSchema>) {
   return runAction(async () => {
     const { actor } = await authorizeStore(storeId);
-    const data = parse(quickSchema, fields);
-    await db.transaction((tx) =>
-      setOrderQuickFields(tx, actor, orderId, {
-        ...(data.uploadStatus !== undefined ? { uploadStatus: data.uploadStatus } : {}),
-        ...(data.comment !== undefined ? { comment: data.comment.trim() } : {}),
-      }),
-    );
+    const data = parseInput(quickSchema, fields);
+    await db.transaction((tx) => setOrderQuickFields(tx, actor, orderId, data));
     refresh();
   });
 }

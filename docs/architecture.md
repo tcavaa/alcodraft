@@ -28,11 +28,13 @@ src/
     actions.ts                 "use server" — validate (zod) → authorize → service → refresh/redirect
     logic.ts                   pure calculation rules shared by server and forms (+ *.test.ts)
     components/                feature UI (client components when interactive)
-  components/                  shared UI: layout (sidebar, ⌘K), data (pagination, filters), forms, ui/ (shadcn)
+  components/                  shared UI: layout (sidebar, ⌘K), data (tables, pagination, filters), forms, ui/ (shadcn)
+  hooks/                       use-action-form (forms), use-server-action (buttons/dialogs), use-request-id
   server/
-    db/                        drizzle client (lazy), pool, schema/*.ts, helpers (locks, numbering)
+    db/                        drizzle client (lazy), pool, schema/*.ts, helpers (locks, numbering),
+                               expressions.ts (debt / cash / supplier-paid formulas), once.ts (double submits)
     auth/                      session, password, dal.ts (requireUser/requireStore/authorize*)
-    action.ts                  runAction() + ActionError (uniform action results)
+    action.ts                  runAction() + ActionError + parseInput() (uniform action results)
     audit.ts                   audit() — one line per important change
   lib/                         money, dates, validation, routes, search-params (no server deps)
   proxy.ts                     optimistic redirect to /admin/login when there is no session cookie
@@ -59,8 +61,9 @@ browser ──► proxy.ts (no cookie? → /admin/login)
 form submit ──► Server Action (features/x/actions.ts)
                   runAction(async () => {
                     authorizeStore(storeId)        ← never trust the client
-                    zod parse                      ← Georgian field errors
+                    parseInput(schema, input)      ← zod; Georgian field errors
                     db.transaction(tx => service(tx, actor, data))   ← locks, stock, numbers, audit
+                      (creates: once(db, { key: requestId, … }, tx => service(…)) — no double booking)
                     refresh() | redirect(...)
                   })
 ```
@@ -77,6 +80,10 @@ form submit ──► Server Action (features/x/actions.ts)
 - Nothing random or time-dependent renders in the static shell (fixed skeleton widths; date
   presets computed in click handlers).
 - After a mutation: `refresh()` (stay on page) or `redirect()` (go to the new document).
+- Route ids go through `idParam()` (`src/lib/search-params.ts`): anything that isn't a positive
+  integer that fits the column is a 404, never a database error.
+- Errors: `app/global-error.tsx` (root layout), `app/admin/error.tsx` (login, panel layout),
+  `app/admin/(panel)/error.tsx` (pages) — all Georgian, with the digest to find the server log line.
 - Build (`npm run build`) fails loudly when a rule is broken — run it before shipping.
 
 ## Authentication & authorization
@@ -85,7 +92,11 @@ form submit ──► Server Action (features/x/actions.ts)
   (httpOnly, sameSite=lax, secure in production), 30 days sliding.
 - Passwords: bcrypt (12 rounds). Imported users have `legacy_md5_bcrypt` = bcrypt(md5(password));
   first successful login rewrites the hash to plain bcrypt (`src/server/auth/password.ts`).
-- Login throttling: 10 failures per e-mail per 15 minutes (counted from `audit_log`).
+- Login: input that isn't an e-mail / password of sane length is refused before any database work.
+  Throttling counts `auth.login_failed` rows of the last 15 minutes **from the same IP** — 10 per
+  (IP, e-mail), 30 per IP — so nobody can lock a colleague out from elsewhere. Every attempt is written
+  before the password is checked (a success rewrites it to `auth.login`, a refused one to
+  `auth.login_throttled`, which doesn't count), so parallel guesses count each other.
 - Roles: `super_admin` (all stores, user/store management, hard deletes) and `user`
   (only stores in `user_stores`). Deactivating a user or resetting a password deletes their sessions.
 - `requireStore()` → 404 for stores you can't open (no information leak);

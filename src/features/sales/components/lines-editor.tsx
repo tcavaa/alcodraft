@@ -1,13 +1,14 @@
 "use client";
 
 import { ListFilter, Search, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { InputGroup, InputGroupAddon, InputGroupButton, InputGroupInput } from "@/components/ui/input-group";
 import { Switch } from "@/components/ui/switch";
-import { dec, formatAmount, formatQty, parseAmount } from "@/lib/money";
+import { gridCell, parseQty } from "@/lib/grid-nav";
+import { type Decimal, dec, formatAmount, formatQty, parseAmount } from "@/lib/money";
 import { cn } from "@/lib/utils";
 
 import type { ProductOption } from "../queries";
@@ -22,13 +23,14 @@ export interface LineState {
 export type LinesState = Record<number, LineState>;
 
 const QTY_FIELDS = ["quantity", "giftQty", "leftoverQty"] as const;
-type Field = "price" | (typeof QTY_FIELDS)[number];
+export type LineField = "price" | (typeof QTY_FIELDS)[number];
 
-export function parseQty(raw: string): number | null {
-  const t = raw.trim();
-  if (t === "") return 0;
-  return /^-?\d+$/.test(t) ? Number(t) : null;
-}
+const FIELD_LABEL: Record<LineField, string> = {
+  price: "ფასი",
+  quantity: "შეტანილი",
+  giftQty: "საჩუქარი",
+  leftoverQty: "ნაშთი",
+};
 
 export function lineHasValues(l: LineState | undefined): boolean {
   if (!l) return false;
@@ -38,50 +40,71 @@ export function lineHasValues(l: LineState | undefined): boolean {
   });
 }
 
+/** The first product whose line can't be saved (bad number, negative gift/leftover, missing price). */
+export function firstInvalidLine(products: ProductOption[], lineOf: (p: ProductOption) => LineState) {
+  return products.find((p) => {
+    const l = lineOf(p);
+    return (
+      QTY_FIELDS.some((f) => parseQty(l[f]) === null) ||
+      (parseQty(l.giftQty) ?? 0) < 0 ||
+      (parseQty(l.leftoverQty) ?? 0) < 0 ||
+      (lineHasValues(l) && !parseAmount(l.price))
+    );
+  });
+}
+
 /** Unit price shown/charged for a line: entry mode applies the discount, final mode doesn't. */
-export function unitPriceOf(l: LineState, factor: string, mode: "entry" | "final") {
+function unitPriceOf(l: LineState, factor: string, mode: "entry" | "final") {
   const price = parseAmount(l.price);
   if (!price) return null;
   return mode === "entry" ? price.times(dec(factor)).toDecimalPlaces(4) : price;
 }
 
+/**
+ * Line state per product with a fallback for products the state doesn't know yet: the product
+ * list can grow while a form is kept alive (Next keeps recent pages mounted), and a missing line
+ * must not crash the form.
+ */
+export function useDocumentLines(products: ProductOption[], initial: (p: ProductOption) => LineState) {
+  const [lines, setLines] = useState<LinesState>(() => Object.fromEntries(products.map((p) => [p.id, initial(p)])));
+  const lineOf = (p: ProductOption): LineState => lines[p.id] ?? initial(p);
+  const setField = (product: ProductOption, field: LineField, value: string) =>
+    setLines((prev) => ({ ...prev, [product.id]: { ...(prev[product.id] ?? initial(product)), [field]: value } }));
+  return { lineOf, setField };
+}
+
 export function LinesEditor({
   products,
-  lines,
+  lineOf,
   onChange,
   mode,
   discountFactor,
   stockMode,
+  savedTotals,
 }: {
   products: ProductOption[];
-  lines: LinesState;
-  onChange: (productId: number, field: Field, value: string) => void;
+  lineOf: (p: ProductOption) => LineState;
+  onChange: (product: ProductOption, field: LineField, value: string) => void;
   /** entry = price before discount (new documents); final = unit price as charged (edits). */
   mode: "entry" | "final";
   discountFactor: string;
   /** block: quantity may not exceed stock (old add form); warn: highlight only; off: no stock column. */
   stockMode: "block" | "warn" | "off";
+  /** Edits: line totals as saved for products not changed yet (they are kept exactly). */
+  savedTotals?: Map<number, Decimal>;
 }) {
   const [query, setQuery] = useState("");
-  const [onlyFilled, setOnlyFilled] = useState(false);
+  // "Only filled": rows filled when it was switched on stay visible while being edited.
+  const [shown, setShown] = useState<Set<number> | null>(null);
 
-  const visible = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return products.filter(
-      (p) => (!q || p.name.toLowerCase().includes(q)) && (!onlyFilled || lineHasValues(lines[p.id])),
-    );
-  }, [products, query, onlyFilled, lines]);
+  const q = query.trim().toLowerCase();
+  const visible = products.filter(
+    (p) => (!q || p.name.toLowerCase().includes(q)) && (!shown || shown.has(p.id) || lineHasValues(lineOf(p))),
+  );
 
-  const filledCount = useMemo(() => products.filter((p) => lineHasValues(lines[p.id])).length, [products, lines]);
-
-  const moveFocus = (e: React.KeyboardEvent<HTMLInputElement>, row: number, col: number) => {
-    const delta = e.key === "ArrowDown" || e.key === "Enter" ? 1 : e.key === "ArrowUp" ? -1 : 0;
-    if (!delta) return;
-    e.preventDefault();
-    const next = document.querySelector<HTMLInputElement>(`[data-line-row="${row + delta}"][data-line-col="${col}"]`);
-    next?.focus();
-    next?.select();
-  };
+  const filledCount = products.filter((p) => lineHasValues(lineOf(p))).length;
+  const toggleOnlyFilled = (on: boolean) =>
+    setShown(on ? new Set(products.filter((p) => lineHasValues(lineOf(p))).map((p) => p.id)) : null);
 
   return (
     <div className="overflow-hidden rounded-xl border bg-card">
@@ -90,7 +113,12 @@ export function LinesEditor({
           <InputGroupAddon>
             <Search />
           </InputGroupAddon>
-          <InputGroupInput value={query} onChange={(e) => setQuery(e.target.value)} placeholder="ჩაწერე დასახელება…" />
+          <InputGroupInput
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="ჩაწერე დასახელება…"
+            aria-label="პროდუქტის ძებნა"
+          />
           {query ? (
             <InputGroupAddon align="inline-end">
               <InputGroupButton size="icon-xs" onClick={() => setQuery("")} aria-label="გასუფთავება">
@@ -103,9 +131,9 @@ export function LinesEditor({
           <ListFilter className="size-4" />
           მხოლოდ შევსებული
           <Badge variant="secondary" className="tabular-nums">
-            {filledCount}
+            {formatQty(filledCount)}
           </Badge>
-          <Switch checked={onlyFilled} onCheckedChange={setOnlyFilled} />
+          <Switch checked={shown !== null} onCheckedChange={toggleOnlyFilled} />
         </label>
       </div>
 
@@ -124,10 +152,10 @@ export function LinesEditor({
           </thead>
           <tbody>
             {visible.map((p, rowIndex) => {
-              const l = lines[p.id] ?? { price: "", quantity: "", giftQty: "", leftoverQty: "" };
+              const l = lineOf(p);
               const qty = parseQty(l.quantity);
               const unit = unitPriceOf(l, discountFactor, mode);
-              const total = unit && qty !== null ? unit.times(qty) : null;
+              const total = savedTotals?.get(p.id) ?? (unit && qty !== null ? unit.times(qty) : null);
               const filled = lineHasValues(l);
               const overStock = stockMode !== "off" && qty !== null && qty > 0 && qty > p.stockQty;
               const priceChanged = mode === "entry" && l.price !== "" && parseAmount(l.price)?.equals(p.salePrice) === false;
@@ -144,25 +172,22 @@ export function LinesEditor({
                     <div className="font-medium">{p.name}</div>
                     {p.supplierName ? <div className="text-xs text-muted-foreground">{p.supplierName}</div> : null}
                   </td>
-                    <td className="px-1.5 py-1.5">
-                      <Input
-                        value={l.price}
-                        onChange={(e) => onChange(p.id, "price", e.target.value)}
-                        onKeyDown={(e) => moveFocus(e, rowIndex, 0)}
-                        onFocus={(e) => e.target.select()}
-                        data-line-row={rowIndex}
-                        data-line-col={0}
-                        inputMode="decimal"
-                        aria-label={`${p.name} — ფასი`}
-                        aria-invalid={l.price !== "" && !parseAmount(l.price)}
-                        className={cn("h-8 px-2 text-right tabular-nums", priceChanged && "border-warning text-warning")}
-                      />
-                      {mode === "entry" && unit && discountFactor !== "1" && filled ? (
-                        <div className="mt-0.5 text-right text-[0.7rem] text-muted-foreground tabular-nums">
-                          {formatAmount(unit)}
-                        </div>
-                      ) : null}
-                    </td>
+                  <td className="px-1.5 py-1.5">
+                    <Input
+                      value={l.price}
+                      onChange={(e) => onChange(p, "price", e.target.value)}
+                      {...gridCell("lines", rowIndex, 0)}
+                      inputMode="decimal"
+                      aria-label={`${p.name} — ${FIELD_LABEL.price}`}
+                      aria-invalid={l.price !== "" && !parseAmount(l.price)}
+                      className={cn("h-8 px-2 text-right tabular-nums", priceChanged && "border-warning text-warning")}
+                    />
+                    {mode === "entry" && unit && discountFactor !== "1" && filled ? (
+                      <div className="mt-0.5 text-right text-[0.7rem] text-muted-foreground tabular-nums">
+                        {formatAmount(unit)}
+                      </div>
+                    ) : null}
+                  </td>
                   {stockMode !== "off" ? (
                     <td
                       className={cn(
@@ -177,14 +202,11 @@ export function LinesEditor({
                     <td key={field} className="px-1.5 py-1.5">
                       <Input
                         value={l[field]}
-                        onChange={(e) => onChange(p.id, field, e.target.value)}
-                        onKeyDown={(e) => moveFocus(e, rowIndex, i + 1)}
-                        onFocus={(e) => e.target.select()}
-                        data-line-row={rowIndex}
-                        data-line-col={i + 1}
+                        onChange={(e) => onChange(p, field, e.target.value)}
+                        {...gridCell("lines", rowIndex, i + 1)}
                         inputMode="numeric"
                         placeholder="0"
-                        aria-label={`${p.name} — ${field}`}
+                        aria-label={`${p.name} — ${FIELD_LABEL[field]}`}
                         aria-invalid={parseQty(l[field]) === null || (field === "quantity" && overStock && stockMode === "block")}
                         className={cn(
                           "h-8 px-2 text-right tabular-nums placeholder:text-muted-foreground/40",
@@ -212,4 +234,3 @@ export function LinesEditor({
     </div>
   );
 }
-

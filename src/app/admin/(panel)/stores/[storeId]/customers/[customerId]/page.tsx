@@ -3,9 +3,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { DocumentLinesTable, sortLineRows } from "@/components/data/document-lines-table";
 import { FilterTabs } from "@/components/data/filter-tabs";
 import { Pagination } from "@/components/data/pagination";
 import { SortableHead } from "@/components/data/sortable-head";
+import { HeadRow, TableCard } from "@/components/data/table-card";
 import { Money } from "@/components/money";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
@@ -26,10 +28,9 @@ import {
 import { OPERATION_KIND_LABEL, operationKind } from "@/features/sales/labels";
 import { paymentLabel } from "@/features/sales/logic";
 import { formatDate } from "@/lib/dates";
-import { dec, formatQty, sum } from "@/lib/money";
+import { dec, sum } from "@/lib/money";
 import { storeHref } from "@/lib/routes";
-import { pageParam, param, sortParam } from "@/lib/search-params";
-import { sortRows } from "@/lib/sort";
+import { idParam, pageParam, param, type SearchParams, sortParam } from "@/lib/search-params";
 import { requireStore } from "@/server/auth/dal";
 
 export const metadata: Metadata = { title: "კლიენტი" };
@@ -42,7 +43,7 @@ export default async function CustomerPage({
 }: PageProps<"/admin/stores/[storeId]/customers/[customerId]">) {
   const { storeId, customerId } = await params;
   const { store, user } = await requireStore(storeId);
-  const data = await getCustomer(store.id, Number(customerId));
+  const data = await getCustomer(store.id, idParam(customerId));
   if (!data) notFound();
   const { customer, stats, openOrders } = data;
   const sp = await searchParams;
@@ -92,19 +93,22 @@ export default async function CustomerPage({
         actions={
           <>
             <DebtAdjustmentDialog storeId={store.id} customerId={customer.id} currentDebt={stats.debt} />
-            <Button variant="outline" asChild>
-              <Link href={`${storeHref(store.id, "orders/new")}?customer=${customer.id}`}>
-                <ClipboardList />
-                შეკვეთა
-              </Link>
-            </Button>
+            {/* A customer in the trash can't get new operations or orders — restore first. */}
             {!customer.isArchived ? (
-              <Button asChild>
-                <Link href={`${storeHref(store.id, "operations/new")}?customer=${customer.id}`}>
-                  <Plus />
-                  ახალი ოპერაცია
-                </Link>
-              </Button>
+              <>
+                <Button variant="outline" asChild>
+                  <Link href={`${storeHref(store.id, "orders/new")}?customer=${customer.id}`}>
+                    <ClipboardList />
+                    შეკვეთა
+                  </Link>
+                </Button>
+                <Button asChild>
+                  <Link href={`${storeHref(store.id, "operations/new")}?customer=${customer.id}`}>
+                    <Plus />
+                    ახალი ოპერაცია
+                  </Link>
+                </Button>
+              </>
             ) : null}
             <Button variant="ghost" size="icon" asChild aria-label="რედაქტირება">
               <Link href={`${pathname}/edit`}>
@@ -141,7 +145,7 @@ export default async function CustomerPage({
                 <>
                   {" "}
                   ·{" "}
-                  <Link href={`${storeHref(store.id, "orders")}?q=${encodeURIComponent(customer.name)}`} className="underline-offset-4 hover:underline">
+                  <Link href={`${storeHref(store.id, "orders")}?customer=${customer.id}`} className="underline-offset-4 hover:underline">
                     {openOrders} ღია შეკვეთა
                   </Link>
                 </>
@@ -195,7 +199,7 @@ async function OperationsTable({
   customerId: number;
   page: number;
   pathname: string;
-  sp: Record<string, string | string[] | undefined>;
+  sp: SearchParams;
   stats: { debt: string; total: string; paid: string };
 }) {
   const { rows, total } = await listCustomerDeliveries(customerId, page, PAGE_SIZE, sortParam(sp, CUSTOMER_OPERATION_SORTS));
@@ -204,10 +208,10 @@ async function OperationsTable({
   }
   return (
     <>
-      <div className="overflow-hidden rounded-xl border bg-card">
+      <TableCard>
         <Table>
           <TableHeader>
-            <TableRow className="bg-muted/40 hover:bg-muted/40">
+            <HeadRow>
               <SortableHead column="date" first="desc">
                 თარიღი
               </SortableHead>
@@ -232,14 +236,14 @@ async function OperationsTable({
               <SortableHead column="comment" className="hidden xl:table-cell">
                 კომენტარი
               </SortableHead>
-            </TableRow>
+            </HeadRow>
           </TableHeader>
           <TableBody>
             {rows.map((op) => {
               const kind = operationKind({ kind: op.kind, total: op.total, paid: op.paid });
               const href = storeHref(storeId, `operations/${op.id}`);
               return (
-                <TableRow key={op.id} className="cursor-pointer">
+                <TableRow key={op.id}>
                   <TableCell>
                     <Link href={href} className="font-medium hover:underline">
                       {formatDate(op.date)}
@@ -300,92 +304,31 @@ async function OperationsTable({
             </TableRow>
           </TableFooter>
         </Table>
-      </div>
+      </TableCard>
       <Pagination page={page} pageSize={PAGE_SIZE} total={total} pathname={pathname} searchParams={sp} />
     </>
   );
 }
 
-const SUMMARY_SORTS = ["name", "price", "quantity", "leftover", "remaining", "gift", "total"] as const;
-
-async function ProductSummary({ customerId, sp }: { customerId: number; sp: Record<string, string | string[] | undefined> }) {
+/** Old company/viewsum: every product the customer ever got, added up over all operations. */
+async function ProductSummary({ customerId, sp }: { customerId: number; sp: SearchParams }) {
   const all = await getCustomerProductSummary(customerId);
-  const rows = sortRows(all, sortParam(sp, SUMMARY_SORTS, "ssort"), {
-    name: (r) => r.name,
-    price: (r) => dec(r.total).div(r.quantity),
-    quantity: (r) => r.quantity,
-    leftover: (r) => r.leftover,
-    remaining: (r) => r.quantity - r.leftover,
-    gift: (r) => r.gift,
-    total: (r) => dec(r.total),
-  });
-  if (rows.length === 0) {
+  if (all.length === 0) {
     return <p className="rounded-xl border border-dashed bg-card/50 p-10 text-center text-sm text-muted-foreground">მიწოდებული პროდუქცია არ არის.</p>;
   }
-  const totals = {
-    quantity: rows.reduce((a, r) => a + r.quantity, 0),
-    leftover: rows.reduce((a, r) => a + r.leftover, 0),
-    gift: rows.reduce((a, r) => a + r.gift, 0),
-    total: sum(rows.map((r) => r.total)),
-  };
-  return (
-    <div className="overflow-hidden rounded-xl border bg-card">
-      <Table>
-        <TableHeader>
-          <TableRow className="bg-muted/40 hover:bg-muted/40">
-            <SortableHead param="ssort" column="name">
-              დასახელება
-            </SortableHead>
-            <SortableHead param="ssort" column="price" className="text-right">
-              საშუალო ფასი
-            </SortableHead>
-            <SortableHead param="ssort" column="quantity" className="text-right">
-              შეტანილი
-            </SortableHead>
-            <SortableHead param="ssort" column="leftover" className="text-right">
-              ნაშთი
-            </SortableHead>
-            <SortableHead param="ssort" column="remaining" className="text-right">
-              დარჩენილი
-            </SortableHead>
-            <SortableHead param="ssort" column="gift" className="text-right">
-              საჩუქარი
-            </SortableHead>
-            <SortableHead param="ssort" column="total" className="text-right">
-              ფასი ჯამში
-            </SortableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((r) => (
-            <TableRow key={r.productId}>
-              <TableCell className="font-medium">{r.name}</TableCell>
-              <TableCell className="text-right">
-                <Money value={dec(r.total).div(r.quantity)} />
-              </TableCell>
-              <TableCell className="text-right tabular-nums">{formatQty(r.quantity)}</TableCell>
-              <TableCell className="text-right tabular-nums">{formatQty(r.leftover)}</TableCell>
-              <TableCell className="text-right tabular-nums">{formatQty(r.quantity - r.leftover)}</TableCell>
-              <TableCell className="text-right tabular-nums">{formatQty(r.gift)}</TableCell>
-              <TableCell className="text-right font-medium">
-                <Money value={r.total} />
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-        <TableFooter>
-          <TableRow className="hover:bg-transparent">
-            <TableCell colSpan={2}>ჯამში</TableCell>
-            <TableCell className="text-right font-semibold tabular-nums">{formatQty(totals.quantity)}</TableCell>
-            <TableCell className="text-right font-semibold tabular-nums">{formatQty(totals.leftover)}</TableCell>
-            <TableCell className="text-right font-semibold tabular-nums">{formatQty(totals.quantity - totals.leftover)}</TableCell>
-            <TableCell className="text-right font-semibold tabular-nums">{formatQty(totals.gift)}</TableCell>
-            <TableCell className="text-right font-semibold">
-              <Money value={totals.total} currency />
-            </TableCell>
-          </TableRow>
-        </TableFooter>
-      </Table>
-    </div>
+  const rows = sortLineRows(
+    all.map((r) => ({
+      key: r.productId,
+      name: r.name,
+      // Average price = Σ line totals ÷ Σ delivered (old viewsum).
+      unitPrice: dec(r.total).div(r.quantity),
+      quantity: r.quantity,
+      leftover: r.leftover,
+      gift: r.gift,
+      total: r.total,
+    })),
+    sp,
+    "ssort",
   );
+  return <DocumentLinesTable rows={rows} total={sum(all.map((r) => r.total))} param="ssort" priceLabel="საშუალო ფასი" />;
 }

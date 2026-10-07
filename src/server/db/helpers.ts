@@ -5,6 +5,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { dec, type Decimal } from "@/lib/money";
 import { ActionError } from "@/server/action";
 
+import { debtSumOrZero } from "./expressions";
 import type { DbOrTx, Tx } from "./index";
 import { customers, deliveries, financeAccounts, products, stores } from "./schema";
 
@@ -49,7 +50,7 @@ export async function defaultAccountId(dbx: DbOrTx, storeId: number): Promise<nu
 export async function customerDebt(dbx: DbOrTx, customerId: number): Promise<Decimal> {
   const [row] = await dbx
     .select({
-      debt: sql<string>`coalesce(sum(${deliveries.totalAmount} - ${deliveries.paidAmount} + ${deliveries.adjustmentAmount}), 0)`,
+      debt: debtSumOrZero,
     })
     .from(deliveries)
     .where(eq(deliveries.customerId, customerId));

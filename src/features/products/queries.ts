@@ -1,8 +1,10 @@
 import "server-only";
 
-import { and, asc, count, desc, eq, ilike, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, sql, type SQL } from "drizzle-orm";
 
 import { db } from "@/server/db";
+import { countByArchived } from "@/server/db/archived";
+import { likePattern } from "@/server/db/expressions";
 import {
   customers,
   deliveries,
@@ -16,12 +18,11 @@ import {
   users,
 } from "@/server/db/schema";
 
-const likeEscape = (q: string) => `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 
 /** Old drinks/index (+ the "ცვლილება" flag without one query per row). */
 export async function listProducts(storeId: number, p: { q?: string; archived: boolean; supplierId?: number }) {
   const conditions: (SQL | undefined)[] = [eq(products.storeId, storeId), eq(products.isArchived, p.archived)];
-  if (p.q) conditions.push(ilike(products.name, likeEscape(p.q)));
+  if (p.q) conditions.push(ilike(products.name, likePattern(p.q)));
   if (p.supplierId) conditions.push(eq(products.supplierId, p.supplierId));
   return db
     .select({
@@ -40,14 +41,7 @@ export async function listProducts(storeId: number, p: { q?: string; archived: b
     .orderBy(asc(products.id));
 }
 
-export async function countProducts(storeId: number) {
-  const rows = await db
-    .select({ archived: products.isArchived, n: count() })
-    .from(products)
-    .where(eq(products.storeId, storeId))
-    .groupBy(products.isArchived);
-  return { active: rows.find((r) => !r.archived)?.n ?? 0, archived: rows.find((r) => r.archived)?.n ?? 0 };
-}
+export const countProducts = (storeId: number) => countByArchived(products, storeId);
 
 export async function getProduct(storeId: number, productId: number) {
   const [row] = await db
@@ -86,7 +80,7 @@ export interface Movement {
 }
 
 /** Latest stock movements of a product: receipts (+), operations (− delivered − gift), corrections. */
-export async function getProductMovements(productId: number, limit: number): Promise<Movement[]> {
+async function getProductMovements(productId: number, limit: number): Promise<Movement[]> {
   const result = await db.execute<{
     kind: Movement["kind"];
     ref_id: number;

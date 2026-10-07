@@ -51,7 +51,7 @@ export interface ComputedLine {
   lineTotal: Decimal;
 }
 
-export function isEmptyLine(l: { quantity: number; giftQty: number; leftoverQty: number }): boolean {
+function isEmptyLine(l: { quantity: number; giftQty: number; leftoverQty: number }): boolean {
   return l.quantity === 0 && l.giftQty === 0 && l.leftoverQty === 0;
 }
 
@@ -87,6 +87,115 @@ export function totalOf(lines: { lineTotal: Numeric }[]): Decimal {
   return sum(lines.map((l) => l.lineTotal));
 }
 
+// ── Editing a saved document ────────────────────────────────────────────────
+
+/** A line row as saved (operation or order item). */
+export interface StoredLine {
+  id: number;
+  productId: number;
+  unitPrice: Numeric;
+  quantity: number;
+  giftQty: number;
+  leftoverQty: number;
+  lineTotal: Numeric;
+}
+
+/** What the edit form shows for one product: its saved rows added up, priced like the first one. */
+export interface ProductLineView {
+  productId: number;
+  unitPrice: Decimal;
+  quantity: number;
+  giftQty: number;
+  leftoverQty: number;
+  /** Σ saved line totals (kept as they are while the product is not changed). */
+  lineTotal: Decimal;
+  rows: StoredLine[];
+}
+
+export function groupStoredLines(rows: StoredLine[]): Map<number, ProductLineView> {
+  const byProduct = new Map<number, ProductLineView>();
+  for (const row of [...rows].sort((a, b) => a.id - b.id)) {
+    const view = byProduct.get(row.productId);
+    if (!view) {
+      byProduct.set(row.productId, {
+        productId: row.productId,
+        unitPrice: dec(row.unitPrice),
+        quantity: row.quantity,
+        giftQty: row.giftQty,
+        leftoverQty: row.leftoverQty,
+        lineTotal: dec(row.lineTotal),
+        rows: [row],
+      });
+    } else {
+      view.quantity += row.quantity;
+      view.giftQty += row.giftQty;
+      view.leftoverQty += row.leftoverQty;
+      view.lineTotal = view.lineTotal.plus(dec(row.lineTotal));
+      view.rows.push(row);
+    }
+  }
+  return byProduct;
+}
+
+/** One product as submitted by the edit form (final unit price, no discount applied). */
+export interface EditedLine {
+  productId: number;
+  unitPrice: Numeric;
+  quantity: number;
+  giftQty: number;
+  leftoverQty: number;
+}
+
+export interface LineEditPlan {
+  /** Saved rows of untouched products — kept exactly, line totals included. */
+  keep: StoredLine[];
+  /** Saved rows of products that were changed or cleared. */
+  remove: StoredLine[];
+  /** New rows for changed products (one per product, line total recomputed). */
+  add: ComputedLine[];
+  /**
+   * Saved total + Σ added − Σ removed. Imported documents whose old total never matched their
+   * rows keep that difference, so editing only the comment never changes the customer's debt.
+   */
+  total: Decimal;
+}
+
+/**
+ * Turns an edit into row changes. A product counts as unchanged when the submitted values equal
+ * what the form showed (`groupStoredLines`); products left out of `edited` are unchanged too.
+ */
+export function planLineEdit(stored: StoredLine[], edited: EditedLine[], storedTotal: Numeric): LineEditPlan {
+  const views = groupStoredLines(stored);
+  const submitted = new Map(edited.map((l) => [l.productId, l]));
+  const keep: StoredLine[] = [];
+  const remove: StoredLine[] = [];
+  const changed: EditedLine[] = [];
+
+  for (const view of views.values()) {
+    const line = submitted.get(view.productId);
+    if (!line || sameAsView(line, view)) {
+      keep.push(...view.rows);
+    } else {
+      remove.push(...view.rows);
+      changed.push(line);
+    }
+  }
+  for (const line of edited) if (!views.has(line.productId)) changed.push(line);
+
+  const add = computeFinalLines(changed);
+  const total = dec(storedTotal).minus(totalOf(remove)).plus(totalOf(add));
+  return { keep, remove, add, total };
+}
+
+function sameAsView(line: EditedLine, view: ProductLineView): boolean {
+  return (
+    dec(line.unitPrice).equals(view.unitPrice) &&
+    line.quantity === view.quantity &&
+    line.giftQty === view.giftQty &&
+    line.leftoverQty === view.leftoverQty
+  );
+}
+
 /** Customer debt after an operation. */
 export function debtAfter(previousDebt: Numeric, total: Numeric, paid: Numeric, adjustment: Numeric = 0): Decimal {
   return dec(previousDebt).plus(dec(total)).minus(dec(paid)).plus(dec(adjustment));
@@ -117,4 +226,13 @@ export function paymentDescription(customerName: string, method: PaymentMethod):
 /** Whether a payment reaches the cash book (old: only `back` is skipped). */
 export function paymentHitsCashBook(method: PaymentMethod | null, paid: Numeric): boolean {
   return method !== null && method !== "back" && !dec(paid).isZero();
+}
+
+/**
+ * What an operation's payment did to the cash book in the old app, for imported operations whose
+ * cash entry could not be linked: every payment except „დაბრუნება“ was booked — including rows
+ * saved before the old app recorded a method (method empty).
+ */
+export function legacyCashEffect(method: PaymentMethod | null, paid: Numeric): Decimal {
+  return method === "back" ? dec(0) : dec(paid);
 }

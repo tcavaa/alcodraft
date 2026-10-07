@@ -7,6 +7,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  uuid,
   varchar,
 } from "drizzle-orm/pg-core";
 
@@ -97,6 +98,32 @@ export const auditLog = app
       details: jsonb(),
       createdAt: createdAt(),
     },
-    (t) => [index().on(t.storeId, t.createdAt), index().on(t.entityType, t.entityId)],
+    (t) => [
+      index().on(t.storeId, t.createdAt),
+      index().on(t.entityType, t.entityId),
+      // Login throttling counts recent "auth.login_failed" rows.
+      index().on(t.action, t.createdAt),
+    ],
+  )
+  .enableRLS();
+
+/**
+ * One row per create request that carries a client-generated id (operation, order, receipt,
+ * payment…). Inserted in the same transaction as the document, so a double submit or a retry
+ * after a lost response finds the row and gets the first result instead of booking twice.
+ */
+export const requestKeys = app
+  .table(
+    "request_keys",
+    {
+      id: uuid().primaryKey(),
+      userId: integer().references(() => users.id, { onDelete: "cascade" }),
+      /** e.g. "delivery.create" — a key is only valid for the action that created it. */
+      action: varchar({ length: 64 }).notNull(),
+      /** What the action returned the first time (ids for the redirect). */
+      result: jsonb(),
+      createdAt: createdAt(),
+    },
+    (t) => [index().on(t.createdAt)],
   )
   .enableRLS();

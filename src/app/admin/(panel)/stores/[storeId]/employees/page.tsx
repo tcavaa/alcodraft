@@ -2,8 +2,9 @@ import { Banknote, Plus } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { FilterTabs } from "@/components/data/filter-tabs";
+import { ArchivedTabs } from "@/components/data/archived-tabs";
 import { SortableHead } from "@/components/data/sortable-head";
+import { HeadRow, TableCard } from "@/components/data/table-card";
 import { EmptyState } from "@/components/empty-state";
 import { Money } from "@/components/money";
 import { PageHeader } from "@/components/page-header";
@@ -51,24 +52,15 @@ export default async function EmployeesPage({ params, searchParams }: PageProps<
         }
       />
       <div className="mb-3">
-        <FilterTabs
-          pathname={storeHref(store.id, "employees")}
-          searchParams={sp}
-          param="archived"
-          value={archived ? "1" : "0"}
-          options={[
-            { value: "0", label: "აქტიური", count: counts.active },
-            { value: "1", label: "სანაგვე", count: counts.archived },
-          ]}
-        />
+        <ArchivedTabs pathname={storeHref(store.id, "employees")} searchParams={sp} archived={archived} counts={counts} />
       </div>
       {rows.length === 0 ? (
         <EmptyState icon={Banknote} title="თანამშრომლები არ არის" />
       ) : (
-        <div className="overflow-hidden rounded-xl border bg-card">
+        <TableCard>
           <Table>
             <TableHeader>
-              <TableRow className="bg-muted/40 hover:bg-muted/40">
+              <HeadRow>
                 <SortableHead column="name">სახელი</SortableHead>
                 <SortableHead column="balance" className="text-right">
                   გასაცემი ხელფასი
@@ -80,7 +72,7 @@ export default async function EmployeesPage({ params, searchParams }: PageProps<
                   ბოლო გაცემა
                 </SortableHead>
                 <TableHead className="w-10" />
-              </TableRow>
+              </HeadRow>
             </TableHeader>
             <TableBody>
               {rows.map((e) => (
@@ -116,7 +108,7 @@ export default async function EmployeesPage({ params, searchParams }: PageProps<
               </TableRow>
             </TableFooter>
           </Table>
-        </div>
+        </TableCard>
       )}
     </>
   );

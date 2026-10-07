@@ -1,9 +1,10 @@
 "use client";
 
 import { ListFilter, PackagePlus, Search } from "lucide-react";
-import { useMemo, useState, useTransition } from "react";
+import { useState } from "react";
 import { toast } from "sonner";
 
+import { ConfirmDialog, ConfirmFigures } from "@/components/confirm-dialog";
 import { Money } from "@/components/money";
 import { Button } from "@/components/ui/button";
 import { Field, FieldLabel } from "@/components/ui/field";
@@ -12,6 +13,9 @@ import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/in
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { useRequestId } from "@/hooks/use-request-id";
+import { useServerAction } from "@/hooks/use-server-action";
+import { gridCell, parseQty } from "@/lib/grid-nav";
 import { dec, formatQty, parseAmount, sum } from "@/lib/money";
 import { cn } from "@/lib/utils";
 
@@ -23,7 +27,7 @@ interface Line {
   quantity: string;
 }
 
-const parseQty = (raw: string) => (raw.trim() === "" ? 0 : /^-?\d+$/.test(raw.trim()) ? Number(raw) : null);
+const newLine = (p: ReceiveProduct): Line => ({ cost: dec(p.purchasePrice).toString(), quantity: "" });
 
 /** Old drinks/stock: received quantity + purchase price per product of the supplier. */
 export function ReceiptForm({
@@ -38,52 +42,54 @@ export function ReceiptForm({
   const [showAll, setShowAll] = useState(!supplier || supplier.isReturns);
   const [query, setQuery] = useState("");
   const [comment, setComment] = useState("");
-  const [lines, setLines] = useState<Record<number, Line>>(() =>
-    Object.fromEntries(products.map((p) => [p.id, { cost: dec(p.purchasePrice).toString(), quantity: "" }])),
+  const [lines, setLines] = useState<Record<number, Line>>(() => Object.fromEntries(products.map((p) => [p.id, newLine(p)])));
+  const [confirming, setConfirming] = useState(false);
+  const requestId = useRequestId();
+  const { run, pending } = useServerAction();
+
+  // Products added since the form opened have no state yet — fall back instead of crashing.
+  const lineOf = (p: ReceiveProduct) => lines[p.id] ?? newLine(p);
+  const set = (p: ReceiveProduct, patch: Partial<Line>) =>
+    setLines((prev) => ({ ...prev, [p.id]: { ...(prev[p.id] ?? newLine(p)), ...patch } }));
+
+  const q = query.trim().toLowerCase();
+  const visible = products.filter(
+    (p) =>
+      (showAll || p.supplierId === supplier?.id || (parseQty(lineOf(p).quantity) ?? 0) !== 0) &&
+      (!q || p.name.toLowerCase().includes(q)),
   );
-  const [pending, startTransition] = useTransition();
+  const filled = products.filter((p) => (parseQty(lineOf(p).quantity) ?? 0) !== 0);
+  const total = sum(filled.map((p) => (parseAmount(lineOf(p).cost) ?? dec(0)).times(parseQty(lineOf(p).quantity) ?? 0)));
+  const pieces = filled.reduce((a, p) => a + (parseQty(lineOf(p).quantity) ?? 0), 0);
+  const invalid = products.find((p) => {
+    const l = lineOf(p);
+    return parseQty(l.quantity) === null || ((parseQty(l.quantity) ?? 0) !== 0 && !parseAmount(l.cost));
+  });
 
-  const visible = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return products.filter(
-      (p) =>
-        (showAll || p.supplierId === supplier?.id || (parseQty(lines[p.id].quantity) ?? 0) !== 0) &&
-        (!q || p.name.toLowerCase().includes(q)),
-    );
-  }, [products, showAll, supplier, query, lines]);
-
-  const filled = products.filter((p) => (parseQty(lines[p.id].quantity) ?? 0) !== 0);
-  const total = sum(filled.map((p) => (parseAmount(lines[p.id].cost) ?? dec(0)).times(parseQty(lines[p.id].quantity) ?? 0)));
-  const invalid = products.some((p) => parseQty(lines[p.id].quantity) === null || (lines[p.id].cost !== "" && !parseAmount(lines[p.id].cost)));
-
-  const set = (id: number, patch: Partial<Line>) => setLines((prev) => ({ ...prev, [id]: { ...prev[id], ...patch } }));
-
-  const submit = () =>
-    startTransition(async () => {
-      if (invalid) {
-        toast.error("შეასწორეთ არასწორი ველები");
-        return;
-      }
-      if (filled.length === 0) {
-        toast.error("შეიყვანეთ მიღებული რაოდენობა");
-        return;
-      }
-      const result = await createReceiptAction(storeId, {
-        supplierId: supplier?.id ?? null,
-        lines: filled.map((p) => ({ productId: p.id, quantity: lines[p.id].quantity, unitCost: lines[p.id].cost })),
-        comment,
-      });
-      if (result && !result.ok) toast.error(result.error);
-    });
-
-  const move = (e: React.KeyboardEvent<HTMLInputElement>, row: number, col: number) => {
-    const delta = e.key === "ArrowDown" || e.key === "Enter" ? 1 : e.key === "ArrowUp" ? -1 : 0;
-    if (!delta) return;
-    e.preventDefault();
-    const next = document.querySelector<HTMLInputElement>(`[data-r-row="${row + delta}"][data-r-col="${col}"]`);
-    next?.focus();
-    next?.select();
+  const submit = () => {
+    if (invalid) {
+      toast.error(`შეასწორეთ ველები: ${invalid.name}`);
+      return;
+    }
+    if (filled.length === 0) {
+      toast.error("შეიყვანეთ მიღებული რაოდენობა");
+      return;
+    }
+    setConfirming(true);
   };
+
+  // Success redirects to the receipt; a failure keeps the request id for the retry.
+  const save = () =>
+    run(
+      () =>
+        createReceiptAction(storeId, {
+          requestId: requestId.current(),
+          supplierId: supplier?.id ?? null,
+          lines: filled.map((p) => ({ productId: p.id, quantity: lineOf(p).quantity, unitCost: lineOf(p).cost })),
+          comment,
+        }),
+      { onError: () => setConfirming(false) },
+    );
 
   return (
     <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
@@ -93,7 +99,12 @@ export function ReceiptForm({
             <InputGroupAddon>
               <Search />
             </InputGroupAddon>
-            <InputGroupInput value={query} onChange={(e) => setQuery(e.target.value)} placeholder="ჩაწერე დასახელება…" />
+            <InputGroupInput
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="ჩაწერე დასახელება…"
+              aria-label="პროდუქტის ძებნა"
+            />
           </InputGroup>
           {supplier && !supplier.isReturns ? (
             <label className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -116,34 +127,32 @@ export function ReceiptForm({
             </thead>
             <tbody>
               {visible.map((p, row) => {
-                const qty = parseQty(lines[p.id].quantity);
-                const costChanged = lines[p.id].cost !== "" && parseAmount(lines[p.id].cost)?.equals(p.purchasePrice) === false;
+                const l = lineOf(p);
+                const qty = parseQty(l.quantity);
+                const costChanged = l.cost !== "" && parseAmount(l.cost)?.equals(p.purchasePrice) === false;
                 return (
                   <tr key={p.id} className={cn("border-b last:border-0", qty ? "bg-accent/50" : "hover:bg-muted/40")}>
                     <td className="px-3 py-1.5 font-medium">{p.name}</td>
                     <td className="px-2 py-1.5 text-right text-muted-foreground tabular-nums">{formatQty(p.stockQty)}</td>
                     <td className="px-2 py-1.5">
                       <Input
-                        value={lines[p.id].cost}
-                        onChange={(e) => set(p.id, { cost: e.target.value })}
-                        onKeyDown={(e) => move(e, row, 0)}
-                        onFocus={(e) => e.target.select()}
-                        data-r-row={row}
-                        data-r-col={0}
+                        value={l.cost}
+                        onChange={(e) => set(p, { cost: e.target.value })}
+                        {...gridCell("receipt", row, 0)}
                         inputMode="decimal"
+                        aria-label={`${p.name} — შემოტანის ფასი`}
+                        aria-invalid={l.cost !== "" && !parseAmount(l.cost)}
                         className={cn("h-8 text-right tabular-nums", costChanged && "border-warning text-warning")}
                       />
                     </td>
                     <td className="px-2 py-1.5">
                       <Input
-                        value={lines[p.id].quantity}
-                        onChange={(e) => set(p.id, { quantity: e.target.value })}
-                        onKeyDown={(e) => move(e, row, 1)}
-                        onFocus={(e) => e.target.select()}
-                        data-r-row={row}
-                        data-r-col={1}
+                        value={l.quantity}
+                        onChange={(e) => set(p, { quantity: e.target.value })}
+                        {...gridCell("receipt", row, 1)}
                         inputMode="numeric"
                         placeholder="0"
+                        aria-label={`${p.name} — დამატება`}
                         aria-invalid={qty === null}
                         className="h-8 text-right tabular-nums placeholder:text-muted-foreground/40"
                       />
@@ -171,7 +180,7 @@ export function ReceiptForm({
           <div className="text-sm text-muted-foreground">მიღების ღირებულება</div>
           <Money value={total} currency className="text-3xl font-semibold tracking-tight" />
           <div className="mt-1 text-xs text-muted-foreground">
-            {filled.length} პროდუქტი · {formatQty(filled.reduce((a, p) => a + (parseQty(lines[p.id].quantity) ?? 0), 0))} ცალი
+            {formatQty(filled.length)} პროდუქტი · {formatQty(pieces)} ცალი
           </div>
         </div>
         <Field>
@@ -186,6 +195,28 @@ export function ReceiptForm({
           საწყობში მიღება
         </Button>
       </div>
+
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title="საწყობში მიღება?"
+        description={
+          <>
+            <ConfirmFigures
+              rows={[
+                { label: "მომწოდებელი", value: supplier?.name ?? "მომწოდებლის გარეშე" },
+                { label: "პროდუქტი / ცალი", value: `${formatQty(filled.length)} / ${formatQty(pieces)}` },
+                { label: "ღირებულება", value: <Money value={total} currency />, strong: true },
+              ]}
+            />
+            <p className="text-xs">მარაგი გაიზრდება; ღირებულება დაემატება მომწოდებლის გადასახდელს.</p>
+          </>
+        }
+        cancelLabel="უკან"
+        confirmLabel="მიღება"
+        pending={pending}
+        onConfirm={save}
+      />
     </div>
   );
 }

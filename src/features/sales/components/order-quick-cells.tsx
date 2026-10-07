@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
+import { useServerAction } from "@/hooks/use-server-action";
 import { cn } from "@/lib/utils";
 
 import { setOrderQuickAction } from "../actions";
@@ -38,6 +39,7 @@ export function UploadStatusToggle({
     <button
       type="button"
       onClick={toggle}
+      aria-pressed={uploaded}
       className={cn(
         "inline-flex h-6 items-center gap-1 rounded-full border px-2 text-xs font-medium whitespace-nowrap transition-colors",
         uploaded
@@ -56,17 +58,9 @@ export function UploadStatusToggle({
 export function OrderCommentCell({ storeId, orderId, comment }: { storeId: number; orderId: number; comment: string }) {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState(comment);
-  const [pending, startTransition] = useTransition();
+  const { run, pending } = useServerAction();
 
-  const save = () =>
-    startTransition(async () => {
-      const result = await setOrderQuickAction(storeId, orderId, { comment: value });
-      if (!result.ok) {
-        toast.error(result.error);
-        return;
-      }
-      setOpen(false);
-    });
+  const save = () => run(() => setOrderQuickAction(storeId, orderId, { comment: value }), { onSuccess: () => setOpen(false) });
 
   return (
     <Popover
@@ -91,7 +85,7 @@ export function OrderCommentCell({ storeId, orderId, comment }: { storeId: numbe
       </PopoverTrigger>
       <PopoverContent className="w-[min(24rem,90vw)]" align="start">
         <div className="space-y-3">
-          <Textarea value={value} onChange={(e) => setValue(e.target.value)} rows={4} autoFocus />
+          <Textarea value={value} onChange={(e) => setValue(e.target.value)} rows={4} autoFocus aria-label="კომენტარი" />
           <div className="flex justify-end gap-2">
             <Button variant="outline" size="sm" onClick={() => setOpen(false)} disabled={pending}>
               გაუქმება

@@ -1,28 +1,28 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import { ConfirmDialog, ConfirmFigures } from "@/components/confirm-dialog";
 import { Money } from "@/components/money";
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
-import { Spinner } from "@/components/ui/spinner";
+import { useRequestId } from "@/hooks/use-request-id";
+import { useServerAction } from "@/hooks/use-server-action";
+import { parseQty } from "@/lib/grid-nav";
 import { dec, parseAmount } from "@/lib/money";
 
 import { createDeliveryAction, createOrderAction } from "../actions";
 import { computeLines, leftoverValue, paymentLabel, totalOf } from "../logic";
 import type { CustomerOption, ProductOption } from "../queries";
 import { CustomerPicker } from "./customer-picker";
-import { lineHasValues, LinesEditor, type LinesState, parseQty } from "./lines-editor";
+import { firstInvalidLine, type LineState, lineHasValues, LinesEditor, useDocumentLines } from "./lines-editor";
 import { SummaryPanel, type SummaryValues } from "./summary-panel";
+
+const newLine = (p: ProductOption): LineState => ({
+  price: dec(p.salePrice).toString(),
+  quantity: "",
+  giftQty: "",
+  leftoverQty: "",
+});
 
 /**
  * New operation ("დღის ჩახურვა", old distribution/add) or new order (old orders/add).
@@ -42,11 +42,7 @@ export function OperationForm({
   initialCustomerId: number | null;
 }) {
   const [customerId, setCustomerId] = useState<number | null>(initialCustomerId);
-  const [lines, setLines] = useState<LinesState>(() =>
-    Object.fromEntries(
-      products.map((p) => [p.id, { price: dec(p.salePrice).toString(), quantity: "", giftQty: "", leftoverQty: "" }]),
-    ),
-  );
+  const { lineOf, setField } = useDocumentLines(products, newLine);
   const [summary, setSummary] = useState<SummaryValues>({
     discountFactor: "1",
     paid: "",
@@ -55,26 +51,24 @@ export function OperationForm({
     uploadStatus: "pending",
     comment: "",
   });
-  const [errors, setErrors] = useState<Record<string, string>>({});
   const [confirming, setConfirming] = useState(false);
-  const [pending, startTransition] = useTransition();
+  const requestId = useRequestId();
+  const { run, pending, errors, setErrors } = useServerAction();
 
   const customer = customers.find((c) => c.id === customerId) ?? null;
-  const filled = useMemo(() => products.filter((p) => lineHasValues(lines[p.id])), [products, lines]);
-
-  const computed = useMemo(
-    () =>
-      computeLines(
-        filled.map((p) => ({
-          productId: p.id,
-          price: parseAmount(lines[p.id].price) ?? 0,
-          quantity: parseQty(lines[p.id].quantity) ?? 0,
-          giftQty: parseQty(lines[p.id].giftQty) ?? 0,
-          leftoverQty: parseQty(lines[p.id].leftoverQty) ?? 0,
-        })),
-        summary.discountFactor,
-      ),
-    [filled, lines, summary.discountFactor],
+  const filled = products.filter((p) => lineHasValues(lineOf(p)));
+  const computed = computeLines(
+    filled.map((p) => {
+      const l = lineOf(p);
+      return {
+        productId: p.id,
+        price: parseAmount(l.price) ?? 0,
+        quantity: parseQty(l.quantity) ?? 0,
+        giftQty: parseQty(l.giftQty) ?? 0,
+        leftoverQty: parseQty(l.leftoverQty) ?? 0,
+      };
+    }),
+    summary.discountFactor,
   );
   const total = totalOf(computed);
   const dirty = filled.length > 0 || summary.paid !== "";
@@ -89,21 +83,11 @@ export function OperationForm({
   const validate = () => {
     const next: Record<string, string> = {};
     if (!customer) next.customerId = "აირჩიეთ კლიენტი";
-    const badLine = products.find((p) => {
-      const l = lines[p.id];
-      return (
-        parseQty(l.quantity) === null ||
-        parseQty(l.giftQty) === null ||
-        parseQty(l.leftoverQty) === null ||
-        (parseQty(l.giftQty) ?? 0) < 0 ||
-        (parseQty(l.leftoverQty) ?? 0) < 0 ||
-        (lineHasValues(l) && !parseAmount(l.price))
-      );
-    });
+    const badLine = firstInvalidLine(products, lineOf);
     if (badLine) next._form = `შეასწორეთ ველები: ${badLine.name}`;
     if (summary.paid !== "" && !parseAmount(summary.paid)) next.paidAmount = "არასწორი თანხა";
     if (kind === "delivery") {
-      const over = filled.find((p) => (parseQty(lines[p.id].quantity) ?? 0) > Math.max(p.stockQty, 0));
+      const over = filled.find((p) => (parseQty(lineOf(p).quantity) ?? 0) > Math.max(p.stockQty, 0));
       if (over) next._form = `${over.name}: შეტანილი აღემატება მარაგს (${over.stockQty}).`;
       if (filled.length === 0 && (parseAmount(summary.paid || "0") ?? dec(0)).isZero()) {
         next._form = "შეიყვანეთ რაოდენობა ან აღებული თანხა.";
@@ -120,33 +104,35 @@ export function OperationForm({
     else toast.error("შეასწორეთ შეცდომები");
   };
 
-  const save = () =>
-    startTransition(async () => {
-      const payload = {
-        customerId: customerId!,
-        lines: filled.map((p) => ({
+  const save = () => {
+    const payload = {
+      requestId: requestId.current(),
+      customerId: customerId!,
+      lines: filled.map((p) => {
+        const l = lineOf(p);
+        return {
           productId: p.id,
-          price: lines[p.id].price,
-          quantity: lines[p.id].quantity || "0",
-          giftQty: lines[p.id].giftQty || "0",
-          leftoverQty: lines[p.id].leftoverQty || "0",
-        })),
-        discountFactor: summary.discountFactor,
-        paidAmount: summary.paid,
-        paymentMethod: summary.method,
-        hasWaybill: summary.hasWaybill,
-        comment: summary.comment,
-      };
-      const result =
+          price: l.price,
+          quantity: l.quantity || "0",
+          giftQty: l.giftQty || "0",
+          leftoverQty: l.leftoverQty || "0",
+        };
+      }),
+      discountFactor: summary.discountFactor,
+      paidAmount: summary.paid,
+      paymentMethod: summary.method ?? "cash",
+      hasWaybill: summary.hasWaybill ?? false,
+      comment: summary.comment,
+    };
+    // Success redirects to the new document; a failure keeps the same request id for the retry.
+    run(
+      () =>
         kind === "delivery"
-          ? await createDeliveryAction(storeId, payload)
-          : await createOrderAction(storeId, { ...payload, uploadStatus: summary.uploadStatus });
-      if (result && !result.ok) {
-        setErrors(result.fieldErrors ?? { _form: result.error });
-        toast.error(result.error);
-        setConfirming(false);
-      }
-    });
+          ? createDeliveryAction(storeId, payload)
+          : createOrderAction(storeId, { ...payload, uploadStatus: summary.uploadStatus ?? "pending" }),
+      { onError: () => setConfirming(false) },
+    );
+  };
 
   const paid = parseAmount(summary.paid || "0") ?? dec(0);
   const debtAfter = customer ? dec(customer.debt).plus(total).minus(paid) : null;
@@ -160,10 +146,8 @@ export function OperationForm({
         </div>
         <LinesEditor
           products={products}
-          lines={lines}
-          onChange={(productId, field, value) =>
-            setLines((prev) => ({ ...prev, [productId]: { ...prev[productId], [field]: value } }))
-          }
+          lineOf={lineOf}
+          onChange={setField}
           mode="entry"
           discountFactor={summary.discountFactor}
           stockMode={kind === "delivery" ? "block" : "warn"}
@@ -189,48 +173,34 @@ export function OperationForm({
         />
       </div>
 
-      <AlertDialog open={confirming} onOpenChange={(o) => !pending && setConfirming(o)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{kind === "delivery" ? "ნამდვილად გსურთ დღის ჩახურვა?" : "შეკვეთის შენახვა"}</AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-2 text-sm">
-                <div className="font-medium text-foreground">{customer?.name}</div>
-                <dl className="grid grid-cols-2 gap-x-6 gap-y-1">
-                  <dt>სულ ჯამში</dt>
-                  <dd className="text-right">
-                    <Money value={total} currency />
-                  </dd>
-                  <dt>აღებული ({paymentLabel(summary.method)})</dt>
-                  <dd className="text-right">
-                    <Money value={paid} currency />
-                  </dd>
-                  {kind === "delivery" && debtAfter ? (
-                    <>
-                      <dt>დარჩენილი ვალი</dt>
-                      <dd className="text-right font-semibold text-foreground">
-                        <Money value={debtAfter} currency tone="debt" />
-                      </dd>
-                    </>
-                  ) : null}
-                </dl>
-                {kind === "delivery" ? (
-                  <p className="text-xs">საწყობიდან ჩამოიწერება {computed.length} პროდუქტი.</p>
-                ) : (
-                  <p className="text-xs">მარაგი და სალარო შეიცვლება მხოლოდ შეკვეთის დასრულებისას.</p>
-                )}
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={pending}>უკან</AlertDialogCancel>
-            <Button onClick={save} disabled={pending}>
-              {pending ? <Spinner /> : null}
-              {kind === "delivery" ? "დიახ, ჩახურვა" : "შენახვა"}
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmDialog
+        open={confirming}
+        onOpenChange={setConfirming}
+        title={kind === "delivery" ? "ნამდვილად გსურთ დღის ჩახურვა?" : "შეკვეთის შენახვა"}
+        description={
+          <>
+            <div className="font-medium text-foreground">{customer?.name}</div>
+            <ConfirmFigures
+              rows={[
+                { label: "სულ ჯამში", value: <Money value={total} currency /> },
+                { label: `აღებული (${paymentLabel(summary.method)})`, value: <Money value={paid} currency /> },
+                ...(kind === "delivery" && debtAfter
+                  ? [{ label: "დარჩენილი ვალი", value: <Money value={debtAfter} currency tone="debt" />, strong: true }]
+                  : []),
+              ]}
+            />
+            {kind === "delivery" ? (
+              <p className="text-xs">საწყობიდან ჩამოიწერება {computed.length} პროდუქტი.</p>
+            ) : (
+              <p className="text-xs">მარაგი და სალარო შეიცვლება მხოლოდ შეკვეთის დასრულებისას.</p>
+            )}
+          </>
+        }
+        cancelLabel="უკან"
+        confirmLabel={kind === "delivery" ? "დიახ, ჩახურვა" : "შენახვა"}
+        pending={pending}
+        onConfirm={save}
+      />
     </div>
   );
 }

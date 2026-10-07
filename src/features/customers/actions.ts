@@ -6,7 +6,7 @@ import { z } from "zod";
 
 import { storeHref } from "@/lib/routes";
 import { formObject, requiredText, text } from "@/lib/validation";
-import { ActionError, type ActionResult, fieldErrorsFrom, runAction } from "@/server/action";
+import { type ActionResult, parseInput, runAction } from "@/server/action";
 import { authorizeStore } from "@/server/auth/dal";
 import { db } from "@/server/db";
 
@@ -26,16 +26,10 @@ const customerSchema = z.object({
   contactPerson: text(200),
 });
 
-function parseCustomer(formData: FormData) {
-  const parsed = customerSchema.safeParse(formObject(formData));
-  if (!parsed.success) throw new ActionError("შეასწორეთ მონიშნული ველები.", fieldErrorsFrom(parsed.error));
-  return parsed.data;
-}
-
 export async function createCustomerAction(storeId: number, _prev: unknown, formData: FormData): Promise<ActionResult> {
   return runAction(async () => {
     const { actor } = await authorizeStore(storeId);
-    const data = parseCustomer(formData);
+    const data = parseInput(customerSchema, formObject(formData));
     const row = await db.transaction((tx) => createCustomer(tx, actor, data));
     redirect(storeHref(storeId, `customers/${row.id}`));
   });
@@ -49,7 +43,7 @@ export async function updateCustomerAction(
 ): Promise<ActionResult> {
   return runAction(async () => {
     const { actor } = await authorizeStore(storeId);
-    const data = parseCustomer(formData);
+    const data = parseInput(customerSchema, formObject(formData));
     await db.transaction((tx) => updateCustomer(tx, actor, customerId, data));
     redirect(storeHref(storeId, `customers/${customerId}`));
   });
@@ -58,7 +52,7 @@ export async function updateCustomerAction(
 export async function setCustomerCommentAction(storeId: number, customerId: number, comment: string) {
   return runAction(async () => {
     const { actor } = await authorizeStore(storeId);
-    const value = z.string().max(5000, "კომენტარი ძალიან გრძელია").parse(comment.trim());
+    const value = parseInput(text(5000), comment);
     await db.transaction((tx) => setCustomerNote(tx, actor, customerId, { comment: value }));
     refresh();
   }, "კომენტარი შენახულია");
@@ -67,7 +61,7 @@ export async function setCustomerCommentAction(storeId: number, customerId: numb
 export async function setCustomerColorAction(storeId: number, customerId: number, color: string | null) {
   return runAction(async () => {
     const { actor } = await authorizeStore(storeId);
-    const value = z.enum(["green", "yellow", "red"]).nullable().parse(color);
+    const value = parseInput(z.enum(["green", "yellow", "red"]).nullable(), color);
     await db.transaction((tx) => setCustomerNote(tx, actor, customerId, { color: value }));
     refresh();
   });
@@ -77,10 +71,11 @@ export async function setCustomerArchivedAction(storeId: number, customerId: num
   return runAction(
     async () => {
       const { actor } = await authorizeStore(storeId);
-      await db.transaction((tx) => setCustomerArchived(tx, actor, customerId, archived));
+      const value = parseInput(z.boolean(), archived);
+      await db.transaction((tx) => setCustomerArchived(tx, actor, customerId, value));
       refresh();
     },
-    archived ? "კლიენტი გადავიდა სანაგვეში" : "კლიენტი აღდგა",
+    archived === true ? "კლიენტი გადავიდა სანაგვეში" : "კლიენტი აღდგა",
   );
 }
 

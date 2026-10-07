@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 
-import { PageHeader } from "@/components/page-header";
-import { Card, CardContent } from "@/components/ui/card";
+import { FormPage } from "@/components/form-page";
 import { createSupplierAction } from "@/features/stock/actions";
 import { SupplierForm } from "@/features/stock/components/supplier-components";
 import { storeHref } from "@/lib/routes";
@@ -13,13 +12,8 @@ export default async function NewSupplierPage({ params }: PageProps<"/admin/stor
   const { storeId } = await params;
   const { store } = await requireStore(storeId);
   return (
-    <div className="mx-auto max-w-xl">
-      <PageHeader back={{ href: storeHref(store.id, "suppliers"), label: "მომწოდებლები" }} eyebrow={store.name} title="ახალი მომწოდებელი" />
-      <Card>
-        <CardContent className="pt-6">
-          <SupplierForm action={createSupplierAction.bind(null, store.id)} submitLabel="დამატება" />
-        </CardContent>
-      </Card>
-    </div>
+    <FormPage width="xl" back={{ href: storeHref(store.id, "suppliers"), label: "მომწოდებლები" }} eyebrow={store.name} title="ახალი მომწოდებელი">
+      <SupplierForm action={createSupplierAction.bind(null, store.id)} submitLabel="დამატება" />
+    </FormPage>
   );
 }

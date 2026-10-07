@@ -4,6 +4,7 @@ import { and, asc, count, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm
 
 import type { SortState } from "@/lib/sort";
 import { db } from "@/server/db";
+import { likePattern } from "@/server/db/expressions";
 import { by } from "@/server/db/order";
 import { auditLog, customers, deliveries, products, stores, userStores, users } from "@/server/db/schema";
 
@@ -38,8 +39,9 @@ export async function getStoreAdmin(storeId: number) {
   return store ?? null;
 }
 
+/** Active users first, then by e-mail. */
 export async function listUsersAdmin() {
-  const rows = await db
+  return db
     .select({
       id: users.id,
       email: users.email,
@@ -54,8 +56,7 @@ export async function listUsersAdmin() {
     .leftJoin(userStores, eq(userStores.userId, users.id))
     .leftJoin(stores, eq(stores.id, userStores.storeId))
     .groupBy(users.id)
-    .orderBy(asc(users.isActive), asc(users.email));
-  return rows.sort((a, b) => Number(b.isActive) - Number(a.isActive) || a.email.localeCompare(b.email));
+    .orderBy(desc(users.isActive), asc(users.email));
 }
 
 export async function getUserAdmin(userId: number) {
@@ -100,7 +101,7 @@ export async function listAudit(p: {
   if (p.storeId) conditions.push(eq(auditLog.storeId, p.storeId));
   if (p.userId) conditions.push(eq(auditLog.userId, p.userId));
   if (p.q) {
-    const like = `%${p.q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+    const like = likePattern(p.q);
     conditions.push(or(ilike(auditLog.summary, like), ilike(auditLog.action, like)));
   }
   const where = conditions.length ? and(...conditions) : undefined;

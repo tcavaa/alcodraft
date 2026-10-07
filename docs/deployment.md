@@ -15,6 +15,7 @@
 | `DATABASE_URL` | Supabase → Connect → **Transaction pooler** URI (port 6543) with the DB password | app (Vercel + `npm run dev`) |
 | `DATABASE_URL_SESSION` | Supabase → Connect → **Session pooler** URI (port 5432) | `db:migrate`, `legacy:*` scripts |
 | `LEGACY_DATABASE_URL` | `mysql://root@127.0.0.1:3306/alcodraft_legacy` | import script only (local) |
+| `TEST_DATABASE_URL` | a disposable Postgres (local or a Supabase branch) — **never production** | integration tests only (optional) |
 
 Locally they live in `.env.local` (git-ignored; template: `.env.example`). On Vercel set
 `DATABASE_URL` (Production + Preview). The `NEXT_PUBLIC_SUPABASE_*` values are not used.
@@ -33,7 +34,9 @@ Locally they live in `.env.local` (git-ignored; template: `.env.example`). On Ve
 
 - `git push` → Vercel builds and deploys (preview deployments for branches).
 - Schema change: edit `src/server/db/schema`, `npm run db:generate`, review the SQL, **run
-  `npm run db:migrate` against production before deploying code that needs it**.
+  `npm run db:migrate` against production before deploying code that needs it**. (Migration
+  `0003_request_keys_and_login_index` — table `request_keys` + an `audit_log` index — must be applied
+  before deploying the version that introduced it: every create and the login use them.)
 - Logs: Vercel → Project → Logs. Slow queries: Supabase → Reports / Query performance.
 
 ## Backups

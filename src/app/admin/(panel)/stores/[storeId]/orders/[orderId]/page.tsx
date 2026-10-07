@@ -1,50 +1,37 @@
-import { ArrowRight, CheckCircle2 } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { SortableHead } from "@/components/data/sortable-head";
+import { DocumentLinesTable, sortLineRows } from "@/components/data/document-lines-table";
+import { InfoList, InfoRow } from "@/components/info-list";
 import { Money } from "@/components/money";
+import { Notice } from "@/components/notice";
 import { PageHeader } from "@/components/page-header";
 import { PrintButton } from "@/components/print-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableFooter, TableHeader, TableRow } from "@/components/ui/table";
 import { DocumentEditForm } from "@/features/sales/components/document-edit-form";
-import { OrderActions } from "@/features/sales/components/order-actions";
 import { ORDER_STATUS_LABEL, UPLOAD_STATUS_LABEL } from "@/features/sales/labels";
 import { leftoverValue, paymentLabel } from "@/features/sales/logic";
 import { getOrder, listProductOptions } from "@/features/sales/queries";
 import { formatDate, formatDateTime } from "@/lib/dates";
-import { dec, formatDiscount, formatQty } from "@/lib/money";
+import { formatDiscount } from "@/lib/money";
 import { storeHref } from "@/lib/routes";
-import { param, sortParam } from "@/lib/search-params";
-import { sortRows } from "@/lib/sort";
+import { idParam, param } from "@/lib/search-params";
 import { requireStore } from "@/server/auth/dal";
 
 export const metadata: Metadata = { title: "შეკვეთა" };
 
-const LINE_SORTS = ["name", "price", "quantity", "leftover", "remaining", "gift", "total"] as const;
-
 export default async function OrderPage({ params, searchParams }: PageProps<"/admin/stores/[storeId]/orders/[orderId]">) {
   const { storeId, orderId } = await params;
   const { store } = await requireStore(storeId);
-  const data = await getOrder(store.id, Number(orderId));
+  const data = await getOrder(store.id, idParam(orderId));
   if (!data) notFound();
   const sp = await searchParams;
   const { order: o, customer, items } = data;
   const isOpen = o.status === "open";
-  // Read-only table of a completed/cancelled order (open orders show the editor instead).
-  const lines = sortRows(items, sortParam(sp, LINE_SORTS), {
-    name: (i) => i.name,
-    price: (i) => dec(i.unitPrice),
-    quantity: (i) => i.quantity,
-    leftover: (i) => i.leftoverQty,
-    remaining: (i) => i.quantity - i.leftoverQty,
-    gift: (i) => i.giftQty,
-    total: (i) => dec(i.lineTotal),
-  });
 
   const header = (
     <PageHeader
@@ -66,18 +53,11 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/ad
         </>
       }
       actions={
-        isOpen ? (
-          <OrderActions
-            storeId={store.id}
-            orderId={o.id}
-            number={o.number}
-            shortStock={items.filter((i) => i.quantity + i.giftQty > i.stockQty).map((i) => i.name)}
-          />
-        ) : (
+        isOpen ? null : (
           <>
             <PrintButton />
             {data.delivery ? (
-              <Button asChild>
+              <Button asChild className="print:hidden">
                 <Link href={storeHref(store.id, `operations/${data.delivery.id}`)}>
                   ოპერაცია #{data.delivery.number} <ArrowRight />
                 </Link>
@@ -90,6 +70,7 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/ad
   );
 
   if (isOpen) {
+    // Editing, completing and cancelling all happen in one form, so completion uses what is on screen.
     const products = await listProductOptions(
       store.id,
       items.map((i) => i.productId),
@@ -97,134 +78,84 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/ad
     return (
       <>
         {header}
-        {param(sp, "created") ? (
-          <div className="mb-5 flex items-center gap-2 rounded-xl border border-success/30 bg-success/10 px-4 py-3 text-sm text-success">
-            <CheckCircle2 className="size-4" />
-            შეკვეთა შენახულია. როცა მიიტანთ — დააჭირეთ „შეკვეთის დასრულება“.
-          </div>
-        ) : null}
+        {param(sp, "created") ? <Notice>შეკვეთა შენახულია. როცა მიიტანთ — დააჭირეთ „შეკვეთის დასრულება“.</Notice> : null}
         <DocumentEditForm
           storeId={store.id}
           kind="order"
           documentId={o.id}
           products={products}
-          initialLines={items.map((i) => ({
+          storedLines={items.map((i) => ({
+            id: i.id,
             productId: i.productId,
             unitPrice: i.unitPrice,
             quantity: i.quantity,
             giftQty: i.giftQty,
             leftoverQty: i.leftoverQty,
+            lineTotal: i.lineTotal,
           }))}
+          storedTotal={o.totalAmount}
           discountFactor={o.discountFactor}
           initial={{
             paid: o.paidAmount,
-            method: o.paymentMethod ?? "cash",
+            method: o.paymentMethod,
             hasWaybill: o.hasWaybill,
             uploadStatus: o.uploadStatus,
             comment: o.comment,
           }}
           previousDebt={data.currentDebt}
+          order={{ number: o.number }}
         />
       </>
     );
   }
 
+  const rows = sortLineRows(
+    items.map((i) => ({
+      key: i.id,
+      name: i.name,
+      unitPrice: i.unitPrice,
+      quantity: i.quantity,
+      leftover: i.leftoverQty,
+      gift: i.giftQty,
+      total: i.lineTotal,
+    })),
+    sp,
+  );
+
   return (
     <>
       {header}
       <div className="grid items-start gap-6 2xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="overflow-hidden rounded-xl border bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow className="bg-muted/40 hover:bg-muted/40">
-                <SortableHead column="name">
-                  დასახელება
-                </SortableHead>
-                <SortableHead column="price" className="text-right">
-                  ფასი
-                </SortableHead>
-                <SortableHead column="quantity" className="text-right">
-                  შეტანილი
-                </SortableHead>
-                <SortableHead column="leftover" className="text-right">
-                  ნაშთი
-                </SortableHead>
-                <SortableHead column="remaining" className="text-right">
-                  დარჩენილი
-                </SortableHead>
-                <SortableHead column="gift" className="text-right">
-                  საჩუქარი
-                </SortableHead>
-                <SortableHead column="total" className="text-right">
-                  ფასი ჯამში
-                </SortableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {lines.map((i) => (
-                <TableRow key={i.id}>
-                  <TableCell className="font-medium">{i.name}</TableCell>
-                  <TableCell className="text-right">
-                    <Money value={i.unitPrice} />
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">{formatQty(i.quantity)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{formatQty(i.leftoverQty)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{formatQty(i.quantity - i.leftoverQty)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{i.giftQty ? formatQty(i.giftQty) : "—"}</TableCell>
-                  <TableCell className="text-right font-medium">
-                    <Money value={i.lineTotal} />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-            <TableFooter>
-              <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={6}>ჯამში</TableCell>
-                <TableCell className="text-right font-semibold">
-                  <Money value={o.totalAmount} currency />
-                </TableCell>
-              </TableRow>
-            </TableFooter>
-          </Table>
-        </div>
+        <DocumentLinesTable rows={rows} total={o.totalAmount} />
         <Card>
           <CardHeader>
             <CardTitle className="text-base">ინფორმაცია</CardTitle>
           </CardHeader>
           <CardContent>
-            <dl className="space-y-2.5 text-sm">
-              <Info label="სულ ჯამში">
+            <InfoList>
+              <InfoRow label="სულ ჯამში">
                 <Money value={o.totalAmount} currency className="font-semibold" />
-              </Info>
-              <Info label="აღებული თანხა">
+              </InfoRow>
+              <InfoRow label="აღებული თანხა">
                 <Money value={o.paidAmount} currency />
-              </Info>
-              <Info label="დარჩენილი (შეკვეთისას)">
+              </InfoRow>
+              <InfoRow label="დარჩენილი (შეკვეთისას)">
                 <Money value={o.debtSnapshot} tone="debt" />
-              </Info>
-              <Info label="გადახდის მეთოდი">{paymentLabel(o.paymentMethod)}</Info>
-              <Info label="ზედნადები">{o.hasWaybill === null ? "—" : o.hasWaybill ? "კი" : "არა"}</Info>
-              <Info label="ფასდაკლება">{formatDiscount(o.discountFactor) || "არა"}</Info>
-              {o.uploadStatus ? <Info label="სტატუსი (RS)">{UPLOAD_STATUS_LABEL[o.uploadStatus]}</Info> : null}
-              <Info label="ნაშთი (ღირებულება)">
+              </InfoRow>
+              <InfoRow label="გადახდის მეთოდი">{paymentLabel(o.paymentMethod)}</InfoRow>
+              <InfoRow label="ზედნადები">{o.hasWaybill === null ? "—" : o.hasWaybill ? "კი" : "არა"}</InfoRow>
+              <InfoRow label="ფასდაკლება">{formatDiscount(o.discountFactor) || "არა"}</InfoRow>
+              {o.uploadStatus ? <InfoRow label="სტატუსი (RS)">{UPLOAD_STATUS_LABEL[o.uploadStatus]}</InfoRow> : null}
+              <InfoRow label="ნაშთი (ღირებულება)">
                 <Money value={leftoverValue(items)} />
-              </Info>
-              {o.completedAt ? <Info label="დასრულდა">{formatDateTime(o.completedAt)}</Info> : null}
-              {o.cancelledAt ? <Info label="გაუქმდა">{formatDateTime(o.cancelledAt)}</Info> : null}
-            </dl>
+              </InfoRow>
+              {o.completedAt ? <InfoRow label="დასრულდა">{formatDateTime(o.completedAt)}</InfoRow> : null}
+              {o.cancelledAt ? <InfoRow label="გაუქმდა">{formatDateTime(o.cancelledAt)}</InfoRow> : null}
+            </InfoList>
             {o.comment ? <p className="mt-4 border-t pt-4 text-sm whitespace-pre-line text-muted-foreground">{o.comment}</p> : null}
           </CardContent>
         </Card>
       </div>
     </>
-  );
-}
-
-function Info({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-baseline justify-between gap-4">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="text-right">{children}</dd>
-    </div>
   );
 }

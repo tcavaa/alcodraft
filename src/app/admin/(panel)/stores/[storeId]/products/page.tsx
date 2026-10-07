@@ -2,10 +2,11 @@ import { Boxes, PackageOpen, Plus } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
-import { FilterTabs } from "@/components/data/filter-tabs";
+import { ArchivedTabs } from "@/components/data/archived-tabs";
 import { ParamSelect } from "@/components/data/param-select";
 import { SearchInput } from "@/components/data/search-input";
 import { SortableHead } from "@/components/data/sortable-head";
+import { HeadRow, TableCard } from "@/components/data/table-card";
 import { EmptyState } from "@/components/empty-state";
 import { Money } from "@/components/money";
 import { PageHeader } from "@/components/page-header";
@@ -72,16 +73,7 @@ export default async function ProductsPage({ params, searchParams }: PageProps<"
       <div className="mb-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <SearchInput placeholder="ჩაწერე დასახელება…" />
-          <FilterTabs
-            pathname={pathname}
-            searchParams={sp}
-            param="archived"
-            value={archived ? "1" : "0"}
-            options={[
-              { value: "0", label: "აქტიური", count: counts.active },
-              { value: "1", label: "სანაგვე", count: counts.archived },
-            ]}
-          />
+          <ArchivedTabs pathname={pathname} searchParams={sp} archived={archived} counts={counts} />
         </div>
         <ParamSelect
           param="supplier"
@@ -94,10 +86,10 @@ export default async function ProductsPage({ params, searchParams }: PageProps<"
       {rows.length === 0 ? (
         <EmptyState icon={Boxes} title="პროდუქცია ვერ მოიძებნა" />
       ) : (
-        <div className="overflow-hidden rounded-xl border bg-card">
+        <TableCard>
           <Table>
             <TableHeader>
-              <TableRow className="bg-muted/40 hover:bg-muted/40">
+              <HeadRow>
                 <SortableHead column="name">დასახელება</SortableHead>
                 <SortableHead column="stock" className="text-right">
                   რაოდენობა
@@ -112,7 +104,7 @@ export default async function ProductsPage({ params, searchParams }: PageProps<"
                   ცვლილება
                 </SortableHead>
                 <TableHead className="w-10" />
-              </TableRow>
+              </HeadRow>
             </TableHeader>
             <TableBody>
               {rows.map((p) => (
@@ -155,7 +147,7 @@ export default async function ProductsPage({ params, searchParams }: PageProps<"
               </TableRow>
             </TableFooter>
           </Table>
-        </div>
+        </TableCard>
       )}
     </>
   );

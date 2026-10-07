@@ -35,9 +35,9 @@ export function DateRangeFilter({ className }: { className?: string }) {
     <div className={cn("flex flex-wrap items-center gap-1.5", pending && "opacity-70", className)}>
       <div className="flex items-center gap-1.5">
         <CalendarRange className="size-4 shrink-0 text-muted-foreground" />
-        <Input type="date" value={from} max={to || undefined} onChange={(e) => apply({ from: e.target.value })} className="h-9 w-[9.5rem] bg-card" aria-label="დან" />
+        <DateField label="დან" value={from} max={to || undefined} onChange={(v) => apply({ from: v })} />
         <span className="text-muted-foreground">—</span>
-        <Input type="date" value={to} min={from || undefined} onChange={(e) => apply({ to: e.target.value })} className="h-9 w-[9.5rem] bg-card" aria-label="მდე" />
+        <DateField label="მდე" value={to} min={from || undefined} onChange={(v) => apply({ to: v })} />
       </div>
       <div className="flex items-center">
         <Button variant="ghost" size="sm" onClick={() => apply({ from: todayIso(), to: todayIso() })}>
@@ -52,6 +52,45 @@ export function DateRangeFilter({ className }: { className?: string }) {
           </Button>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Native date input. While empty and not focused it shows its label instead of the browser's
+ * placeholder — Safari draws today's date there in grey, which reads like an active filter.
+ */
+function DateField({
+  label,
+  value,
+  min,
+  max,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  min?: string;
+  max?: string;
+  onChange: (value: string) => void;
+}) {
+  const empty = value === "";
+  return (
+    <div className="relative">
+      <Input
+        type="date"
+        value={value}
+        min={min}
+        max={max}
+        onChange={(e) => onChange(e.target.value)}
+        data-empty={empty}
+        className="peer h-9 w-[9.5rem] bg-card"
+        aria-label={label}
+      />
+      {empty ? (
+        <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-muted-foreground peer-focus:hidden">
+          {label}
+        </span>
+      ) : null}
     </div>
   );
 }

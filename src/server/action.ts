@@ -1,7 +1,7 @@
 import "server-only";
 
 import { unstable_rethrow } from "next/navigation";
-import type { ZodError } from "zod";
+import type { output, ZodError, ZodType } from "zod";
 
 import type { ActionResult } from "@/lib/action-result";
 
@@ -24,6 +24,17 @@ export function fieldErrorsFrom(error: ZodError): Record<string, string> {
     out[key] ??= issue.message;
   }
   return out;
+}
+
+/** Validates action input; failures become field errors on the form (never a 500). */
+export function parseInput<T extends ZodType>(schema: T, input: unknown): output<T> {
+  const parsed = schema.safeParse(input);
+  if (!parsed.success) {
+    const fieldErrors = fieldErrorsFrom(parsed.error);
+    // A schema for a single value reports its message under "_" — show it as the form message.
+    throw new ActionError(fieldErrors._ ?? "შეასწორეთ მონიშნული ველები.", fieldErrors);
+  }
+  return parsed.data;
 }
 
 /**

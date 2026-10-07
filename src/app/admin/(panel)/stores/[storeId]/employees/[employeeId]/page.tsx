@@ -3,45 +3,40 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { HistoryCard, sortHistory } from "@/components/data/history-card";
 import { Money } from "@/components/money";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { SortableHead } from "@/components/data/sortable-head";
-import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { EmployeeRowMenu, WageForm } from "@/features/finance/components/finance-components";
 import { getEmployee } from "@/features/finance/queries";
-import { formatDate } from "@/lib/dates";
 import { dec, sum } from "@/lib/money";
 import { storeHref } from "@/lib/routes";
-import { sortParam } from "@/lib/search-params";
-import { sortRows } from "@/lib/sort";
+import { idParam } from "@/lib/search-params";
 import { requireStore } from "@/server/auth/dal";
 
 export const metadata: Metadata = { title: "თანამშრომელი" };
 
 /** Old employees/historywages. */
-const SORTS = ["date", "amount", "comment"] as const;
-
 export default async function EmployeePage({ params, searchParams }: PageProps<"/admin/stores/[storeId]/employees/[employeeId]">) {
   const { storeId, employeeId } = await params;
   const { store } = await requireStore(storeId);
-  const data = await getEmployee(store.id, Number(employeeId));
+  const data = await getEmployee(store.id, idParam(employeeId));
   if (!data) notFound();
   const { employee: e } = data;
   const sp = await searchParams;
-  const payments = sortRows(data.payments, sortParam(sp, SORTS, "psort"), {
-    date: (p) => p.date,
-    amount: (p) => dec(p.amountOut).minus(p.amountIn),
-    comment: (p) => p.note,
-  });
-  const accruals = sortRows(data.accruals, sortParam(sp, SORTS, "asort"), {
-    date: (a) => a.date,
-    amount: (a) => dec(a.amount),
-    comment: (a) => a.comment,
-  });
-  const paid = sum(payments.map((p) => dec(p.amountOut).minus(p.amountIn)));
+  const payments = sortHistory(
+    data.payments.map((p) => ({ id: p.id, date: p.date, amount: dec(p.amountOut).minus(p.amountIn), comment: p.note })),
+    sp,
+    "psort",
+  );
+  const accruals = sortHistory(
+    data.accruals.map((a) => ({ id: a.id, date: a.date, amount: a.amount, comment: a.comment })),
+    sp,
+    "asort",
+  );
+  const paid = sum(payments.map((p) => p.amount));
   const accrued = sum(accruals.map((a) => a.amount));
 
   return (
@@ -75,7 +70,7 @@ export default async function EmployeePage({ params, searchParams }: PageProps<"
               <CardDescription>ჩაიწერება სალაროში და შეამცირებს გასაცემს.</CardDescription>
             </CardHeader>
             <CardContent>
-              <WageForm storeId={store.id} employeeId={e.id} mode="pay" />
+              <WageForm storeId={store.id} employeeId={e.id} employeeName={e.name} mode="pay" />
             </CardContent>
           </Card>
           <Card>
@@ -84,90 +79,12 @@ export default async function EmployeePage({ params, searchParams }: PageProps<"
               <CardDescription>ზრდის გასაცემ ხელფასს.</CardDescription>
             </CardHeader>
             <CardContent>
-              <WageForm storeId={store.id} employeeId={e.id} mode="accrue" />
+              <WageForm storeId={store.id} employeeId={e.id} employeeName={e.name} mode="accrue" />
             </CardContent>
           </Card>
         </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">მიცემული</CardTitle>
-          </CardHeader>
-          <CardContent className="px-0">
-            {payments.length === 0 ? (
-              <p className="px-6 text-sm text-muted-foreground">გადახდები არ არის.</p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <SortableHead param="psort" column="date" first="desc" className="pl-6">
-                      თარიღი
-                    </SortableHead>
-                    <SortableHead param="psort" column="amount" className="text-right">
-                      თანხა
-                    </SortableHead>
-                    <SortableHead param="psort" column="comment" className="pr-6">
-                      კომენტარი
-                    </SortableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {payments.map((p) => (
-                    <TableRow key={p.id}>
-                      <TableCell className="pl-6">{formatDate(p.date)}</TableCell>
-                      <TableCell className="text-right">
-                        <Money value={dec(p.amountOut).minus(p.amountIn)} />
-                      </TableCell>
-                      <TableCell className="pr-6 text-muted-foreground">
-                        <div className="max-w-[14rem] truncate" title={p.note || undefined}>{p.note}</div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">ხელფასი (დარიცხვები)</CardTitle>
-          </CardHeader>
-          <CardContent className="px-0">
-            {accruals.length === 0 ? (
-              <p className="px-6 text-sm text-muted-foreground">დარიცხვები არ არის.</p>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <SortableHead param="asort" column="date" first="desc" className="pl-6">
-                      თარიღი
-                    </SortableHead>
-                    <SortableHead param="asort" column="amount" className="text-right">
-                      ხელფასი
-                    </SortableHead>
-                    <SortableHead param="asort" column="comment" className="pr-6">
-                      კომენტარი
-                    </SortableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {accruals.map((a) => (
-                    <TableRow key={a.id}>
-                      <TableCell className="pl-6">{formatDate(a.date)}</TableCell>
-                      <TableCell className="text-right">
-                        <Money value={a.amount} />
-                      </TableCell>
-                      <TableCell className="pr-6 text-muted-foreground">
-                        <div className="max-w-[14rem] truncate" title={a.comment || undefined}>{a.comment}</div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+        <HistoryCard title="მიცემული" param="psort" rows={payments} amountLabel="თანხა" emptyText="გადახდები არ არის." />
+        <HistoryCard title="ხელფასი (დარიცხვები)" param="asort" rows={accruals} amountLabel="ხელფასი" emptyText="დარიცხვები არ არის." />
       </div>
     </>
   );

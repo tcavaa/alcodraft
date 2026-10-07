@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { type Decimal, dec, parseAmount } from "./money";
+import { EMAIL_MAX, MAX_ID, PASSWORD_MAX, PASSWORD_MIN } from "./policy";
 
 /** Amount typed by a person ("1 234,50" or "1234.5"). */
 export function amount(opts: { required?: boolean; allowNegative?: boolean; min?: number } = {}) {
@@ -34,14 +35,17 @@ export function amount(opts: { required?: boolean; allowNegative?: boolean; min?
     });
 }
 
-/** Whole number (quantities, stock counts). */
-export function wholeNumber(opts: { allowNegative?: boolean } = {}) {
+/** Whole number (quantities, stock counts). Empty = 0 unless `required`. */
+export function wholeNumber(opts: { allowNegative?: boolean; required?: boolean } = {}) {
   return z
     .union([z.string(), z.number()])
     .optional()
     .transform((raw, ctx): number => {
       const text = raw === undefined || raw === null ? "" : String(raw).trim();
-      if (text === "") return 0;
+      if (text === "") {
+        if (opts.required) ctx.addIssue({ code: "custom", message: "შეიყვანეთ რაოდენობა" });
+        return 0;
+      }
       if (!/^-?\d+$/.test(text)) {
         ctx.addIssue({ code: "custom", message: "მთელი რიცხვი" });
         return z.NEVER;
@@ -59,7 +63,7 @@ export function wholeNumber(opts: { allowNegative?: boolean } = {}) {
     });
 }
 
-export const id = z.coerce.number().int().positive();
+export const id = z.coerce.number().int().positive().max(MAX_ID);
 
 export function text(max = 2000) {
   return z
@@ -79,13 +83,31 @@ export function requiredText(label: string, max = 300) {
 export const email = z
   .string({ error: "შეიყვანეთ ელფოსტა" })
   .transform((v) => v.trim().toLowerCase())
-  .pipe(z.email("არასწორი ელფოსტა"));
+  .pipe(z.email("არასწორი ელფოსტა").max(EMAIL_MAX, "ძალიან გრძელი ელფოსტა"));
 
-export const PASSWORD_MIN = 8;
 export const password = z
   .string({ error: "შეიყვანეთ პაროლი" })
   .min(PASSWORD_MIN, `პაროლი მინიმუმ ${PASSWORD_MIN} სიმბოლო`)
-  .max(200, "ძალიან გრძელი პაროლი");
+  .max(PASSWORD_MAX, "ძალიან გრძელი პაროლი");
+
+/** A switch / checkbox posted in a form ("on"); absent = false. Booleans pass through. */
+export function checkbox() {
+  return z
+    .union([z.string(), z.boolean()])
+    .optional()
+    .transform((v) => v === true || v === "on" || v === "true");
+}
+
+/** Required free-text reason (stock count, debt correction). */
+export function reason(max = 2000) {
+  return z
+    .string({ error: "მიუთითეთ მიზეზი" })
+    .transform((v) => v.trim())
+    .pipe(z.string().min(3, "მიუთითეთ მიზეზი").max(max, `მაქსიმუმ ${max} სიმბოლო`));
+}
+
+/** One-time id a form sends with a create, so a double submit or retry is not booked twice. */
+export const requestId = z.uuid().optional();
 
 /** Read a FormData into a plain object (repeated keys → arrays). */
 export function formObject(formData: FormData): Record<string, unknown> {

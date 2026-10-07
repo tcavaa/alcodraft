@@ -5,8 +5,8 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import { storeHref } from "@/lib/routes";
-import { amount, formObject, requiredText, text, wholeNumber } from "@/lib/validation";
-import { ActionError, type ActionResult, fieldErrorsFrom, runAction } from "@/server/action";
+import { amount, formObject, reason, requiredText, text, wholeNumber } from "@/lib/validation";
+import { type ActionResult, parseInput, runAction } from "@/server/action";
 import { authorizeStore } from "@/server/auth/dal";
 import { db } from "@/server/db";
 
@@ -30,16 +30,10 @@ const productSchema = z.object({
   comment: text(2000),
 });
 
-function parseProduct(formData: FormData) {
-  const parsed = productSchema.safeParse(formObject(formData));
-  if (!parsed.success) throw new ActionError("შეასწორეთ მონიშნული ველები.", fieldErrorsFrom(parsed.error));
-  return parsed.data;
-}
-
 export async function createProductAction(storeId: number, _prev: unknown, formData: FormData): Promise<ActionResult> {
   return runAction(async () => {
     const { actor } = await authorizeStore(storeId);
-    const data = parseProduct(formData);
+    const data = parseInput(productSchema, formObject(formData));
     const row = await db.transaction((tx) => createProduct(tx, actor, data));
     redirect(storeHref(storeId, `products/${row.id}?created=1`));
   });
@@ -53,7 +47,7 @@ export async function updateProductAction(
 ): Promise<ActionResult> {
   return runAction(async () => {
     const { actor } = await authorizeStore(storeId);
-    const data = parseProduct(formData);
+    const data = parseInput(productSchema, formObject(formData));
     await db.transaction((tx) => updateProduct(tx, actor, productId, data));
     refresh();
   }, "პროდუქტი შენახულია");
@@ -63,10 +57,11 @@ export async function setProductArchivedAction(storeId: number, productId: numbe
   return runAction(
     async () => {
       const { actor } = await authorizeStore(storeId);
-      await db.transaction((tx) => setProductArchived(tx, actor, productId, archived));
+      const value = parseInput(z.boolean(), archived);
+      await db.transaction((tx) => setProductArchived(tx, actor, productId, value));
       refresh();
     },
-    archived ? "პროდუქტი გადავიდა სანაგვეში" : "პროდუქტი აღდგა",
+    archived === true ? "პროდუქტი გადავიდა სანაგვეში" : "პროდუქტი აღდგა",
   );
 }
 
@@ -79,19 +74,17 @@ export async function deleteProductAction(storeId: number, productId: number) {
 }
 
 const adjustSchema = z.object({
-  newQty: wholeNumber({ allowNegative: true }),
-  reason: z
-    .string()
-    .transform((v) => v.trim())
-    .pipe(z.string().min(3, "მიუთითეთ მიზეზი").max(500)),
+  newQty: wholeNumber({ allowNegative: true, required: true }),
+  /** The stock the dialog showed — a receipt or sale since then must not be wiped by the count. */
+  expectedQty: z.number().int(),
+  reason: reason(500),
 });
 
 export async function adjustStockAction(storeId: number, productId: number, input: z.input<typeof adjustSchema>) {
   return runAction(async () => {
     const { actor } = await authorizeStore(storeId);
-    const parsed = adjustSchema.safeParse(input);
-    if (!parsed.success) throw new ActionError("შეასწორეთ მონიშნული ველები.", fieldErrorsFrom(parsed.error));
-    await db.transaction((tx) => adjustProductStock(tx, actor, productId, parsed.data));
+    const data = parseInput(adjustSchema, input);
+    await db.transaction((tx) => adjustProductStock(tx, actor, productId, data));
     refresh();
   }, "მარაგი განახლდა");
 }

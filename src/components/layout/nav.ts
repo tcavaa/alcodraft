@@ -27,6 +27,13 @@ export interface NavGroup {
   items: NavItem[];
 }
 
+/** A link outside the store pages. */
+export interface NavLink {
+  title: string;
+  href: string;
+  icon: LucideIcon;
+}
+
 /** Everything a store can do — identical for every store. */
 export const STORE_NAV: NavGroup[] = [
   {
@@ -59,15 +66,15 @@ export const STORE_NAV: NavGroup[] = [
   },
 ];
 
-export const GLOBAL_NAV: (NavItem & { href: string })[] = [
-  { title: "ყველა მაღაზია", segment: "", href: "/admin", icon: Store },
-  { title: "ყველა შეკვეთა", segment: "", href: "/admin/orders", icon: ClipboardList },
+export const GLOBAL_NAV: NavLink[] = [
+  { title: "ყველა მაღაზია", href: "/admin", icon: Store },
+  { title: "ყველა შეკვეთა", href: "/admin/orders", icon: ClipboardList },
 ];
 
-export const ADMIN_NAV: (NavItem & { href: string })[] = [
-  { title: "მაღაზიები", segment: "", href: "/admin/settings/stores", icon: Store },
-  { title: "მომხმარებლები", segment: "", href: "/admin/settings/users", icon: UserRoundCog },
-  { title: "აუდიტი", segment: "", href: "/admin/settings/audit", icon: ScrollText },
+export const ADMIN_NAV: NavLink[] = [
+  { title: "მაღაზიები", href: "/admin/settings/stores", icon: Store },
+  { title: "მომხმარებლები", href: "/admin/settings/users", icon: UserRoundCog },
+  { title: "აუდიტი", href: "/admin/settings/audit", icon: ScrollText },
 ];
 
 export { storeHref } from "@/lib/routes";

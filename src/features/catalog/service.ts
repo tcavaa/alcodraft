@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, ne, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { todayIso } from "@/lib/dates";
 import { type Decimal, dec, formatAmount, toDb } from "@/lib/money";
@@ -12,6 +12,7 @@ import {
   customers,
   deliveries,
   deliveryItems,
+  financeEntries,
   orderItems,
   orders,
   productPriceChanges,
@@ -120,14 +121,23 @@ export async function setProductArchived(tx: Tx, actor: Actor, productId: number
   });
 }
 
-/** Inventory count: sets the stock to what is physically there, with a reason. */
+/**
+ * Inventory count: sets the stock to what is physically there, with a reason. `expectedQty` is the
+ * stock the dialog showed; if goods came in or went out since, the count is refused so the person
+ * can re-check instead of wiping that movement.
+ */
 export async function adjustProductStock(
   tx: Tx,
   actor: Actor,
   productId: number,
-  input: { newQty: number; reason: string },
+  input: { newQty: number; expectedQty: number; reason: string },
 ) {
   const product = (await lockProducts(tx, actor.storeId, [productId])).get(productId)!;
+  if (product.stockQty !== input.expectedQty) {
+    throw new ActionError(`მარაგი ამასობაში შეიცვალა (ახლა ${product.stockQty}). გადაამოწმეთ და სცადეთ თავიდან.`, {
+      newQty: `ახლანდელი მარაგი: ${product.stockQty}`,
+    });
+  }
   const delta = input.newQty - product.stockQty;
   if (delta === 0) return;
   await tx.insert(stockAdjustments).values({
@@ -238,6 +248,12 @@ export async function deleteSupplier(tx: Tx, actor: Actor, supplierId: number) {
     .where(eq(stockReceipts.supplierId, supplierId))
     .limit(1);
   if (inReceipts) throw new ActionError("მომწოდებელს აქვს მიღებების ისტორია — გადაიტანეთ სანაგვეში.");
+  const [paid] = await tx
+    .select({ id: financeEntries.id })
+    .from(financeEntries)
+    .where(eq(financeEntries.supplierId, supplierId))
+    .limit(1);
+  if (paid) throw new ActionError("მომწოდებელს აქვს გადახდების ისტორია — გადაიტანეთ სანაგვეში.");
   await tx.update(products).set({ supplierId: null }).where(eq(products.supplierId, supplierId));
   await tx.delete(suppliers).where(eq(suppliers.id, supplierId));
   await audit(tx, {
@@ -299,14 +315,31 @@ export async function updateCustomer(tx: Tx, actor: Actor, customerId: number, i
   });
 }
 
+const COLOR_LABEL = { green: "მწვანე", yellow: "ყვითელი", red: "წითელი" } as const;
+
 export async function setCustomerNote(
   tx: Tx,
   actor: Actor,
   customerId: number,
   fields: { comment?: string; color?: "green" | "yellow" | "red" | null },
 ) {
-  await lockCustomer(tx, actor, customerId);
+  const customer = await lockCustomer(tx, actor, customerId);
+  const changes: string[] = [];
+  if (fields.comment !== undefined && fields.comment !== customer.comment) changes.push("კომენტარი შეიცვალა");
+  if (fields.color !== undefined && fields.color !== customer.color) {
+    changes.push(`ფერი: ${fields.color ? COLOR_LABEL[fields.color] : "უფერო"}`);
+  }
+  if (changes.length === 0) return;
   await tx.update(customers).set(fields).where(eq(customers.id, customerId));
+  await audit(tx, {
+    storeId: actor.storeId,
+    userId: actor.userId,
+    action: "customer.note",
+    entityType: "customer",
+    entityId: customerId,
+    summary: `${customer.name}: ${changes.join("; ")}`,
+    details: { before: { comment: customer.comment, color: customer.color }, after: fields },
+  });
 }
 
 export async function setCustomerArchived(tx: Tx, actor: Actor, customerId: number, archived: boolean) {
@@ -340,20 +373,4 @@ export async function deleteCustomer(tx: Tx, actor: Actor, customerId: number) {
     entityId: customerId,
     summary: `წაიშალა კლიენტი: ${customer.name}`,
   });
-}
-
-/** Used by forms to warn about duplicates. */
-export async function customerNameTaken(tx: Tx, storeId: number, name: string, exceptId?: number) {
-  const [row] = await tx
-    .select({ id: customers.id })
-    .from(customers)
-    .where(
-      and(
-        eq(customers.storeId, storeId),
-        sql`lower(${customers.name}) = lower(${name})`,
-        exceptId ? ne(customers.id, exceptId) : undefined,
-      ),
-    )
-    .limit(1);
-  return Boolean(row);
 }

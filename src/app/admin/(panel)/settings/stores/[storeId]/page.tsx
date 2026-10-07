@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { updateStoreAction } from "@/features/admin/actions";
 import { DeleteStoreButton, StoreForm } from "@/features/admin/components/admin-forms";
 import { getStoreAdmin } from "@/features/admin/queries";
+import { idParam } from "@/lib/search-params";
 import { requireSuperAdmin } from "@/server/auth/dal";
 
 export const metadata: Metadata = { title: "მაღაზიის რედაქტირება" };
@@ -16,7 +17,7 @@ export const metadata: Metadata = { title: "მაღაზიის რედ�
 export default async function EditStorePage({ params }: PageProps<"/admin/settings/stores/[storeId]">) {
   await requireSuperAdmin();
   const { storeId } = await params;
-  const store = await getStoreAdmin(Number(storeId));
+  const store = await getStoreAdmin(idParam(storeId));
   if (!store) notFound();
   return (
     <div className="mx-auto max-w-xl space-y-6">

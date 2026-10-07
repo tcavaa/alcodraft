@@ -4,10 +4,11 @@ import { and, asc, count, desc, eq, ilike, max, or, sql, type SQL } from "drizzl
 
 import type { SortState } from "@/lib/sort";
 import { db } from "@/server/db";
+import { countByArchived } from "@/server/db/archived";
+import { debtDelta, debtSum, debtSumOrZero, likePattern } from "@/server/db/expressions";
 import { by } from "@/server/db/order";
 import { customers, deliveries, deliveryItems, orders, products } from "@/server/db/schema";
 
-import { debtExpr } from "../dashboard/queries";
 
 export const CUSTOMER_SORTS = ["color", "name", "comment", "debt", "last"] as const;
 export type CustomerSort = (typeof CUSTOMER_SORTS)[number];
@@ -22,14 +23,13 @@ export interface CustomerListParams {
   pageSize: number;
 }
 
-const likeEscape = (q: string) => `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
 
 /** Customers with their current debt (old company/index, without the N+1 queries). */
 export async function listCustomers(storeId: number, p: CustomerListParams) {
   const stats = db
     .select({
       customerId: deliveries.customerId,
-      debt: debtExpr.as("debt"),
+      debt: debtSum.as("debt"),
       lastDate: max(deliveries.deliveryDate).as("last_date"),
     })
     .from(deliveries)
@@ -39,7 +39,7 @@ export async function listCustomers(storeId: number, p: CustomerListParams) {
 
   const conditions: (SQL | undefined)[] = [eq(customers.storeId, storeId), eq(customers.isArchived, p.archived)];
   if (p.q) {
-    const like = likeEscape(p.q);
+    const like = likePattern(p.q);
     conditions.push(
       or(
         ilike(customers.name, like),
@@ -107,17 +107,7 @@ export async function listCustomers(storeId: number, p: CustomerListParams) {
   return { rows, ...totals };
 }
 
-export async function countCustomers(storeId: number) {
-  const rows = await db
-    .select({ archived: customers.isArchived, n: count() })
-    .from(customers)
-    .where(eq(customers.storeId, storeId))
-    .groupBy(customers.isArchived);
-  return {
-    active: rows.find((r) => !r.archived)?.n ?? 0,
-    archived: rows.find((r) => r.archived)?.n ?? 0,
-  };
-}
+export const countCustomers = (storeId: number) => countByArchived(customers, storeId);
 
 export async function getCustomer(storeId: number, customerId: number) {
   const [customer] = await db
@@ -127,7 +117,7 @@ export async function getCustomer(storeId: number, customerId: number) {
   if (!customer) return null;
   const [stats] = await db
     .select({
-      debt: sql<string>`coalesce(${debtExpr}, 0)`,
+      debt: debtSumOrZero,
       total: sql<string>`coalesce(sum(${deliveries.totalAmount}), 0)`,
       paid: sql<string>`coalesce(sum(${deliveries.paidAmount}), 0)`,
       operations: sql<number>`(count(*) filter (where ${deliveries.kind} = 'delivery'))::int`,
@@ -165,7 +155,7 @@ export async function listCustomerDeliveries(
       method: deliveries.paymentMethod,
       comment: deliveries.comment,
       debtAfter:
-        sql<string>`sum(${deliveries.totalAmount} - ${deliveries.paidAmount} + ${deliveries.adjustmentAmount}) over (order by ${deliveries.id})`.as(
+        sql<string>`sum(${debtDelta}) over (order by ${deliveries.id})`.as(
           "debt_after",
         ),
     })
@@ -229,10 +219,3 @@ export async function getCustomerProductSummary(customerId: number) {
 }
 
 /** Active customers for pickers (operation / order forms). */
-export async function listCustomerOptions(storeId: number) {
-  return db
-    .select({ id: customers.id, name: customers.name, address: customers.address, phone: customers.phone })
-    .from(customers)
-    .where(and(eq(customers.storeId, storeId), eq(customers.isArchived, false)))
-    .orderBy(asc(customers.name));
-}

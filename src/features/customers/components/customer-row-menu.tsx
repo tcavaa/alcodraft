@@ -1,8 +1,8 @@
 "use client";
 
-import { Archive, ArchiveRestore, ClipboardList, Pencil, ReceiptText, Trash2 } from "lucide-react";
+import { ClipboardList, Pencil, ReceiptText } from "lucide-react";
 
-import { RowMenu, type RowMenuItem } from "@/components/row-menu";
+import { archiveMenuItems, RowMenu, type RowMenuItem } from "@/components/row-menu";
 import { storeHref } from "@/lib/routes";
 
 import { deleteCustomerAction, setCustomerArchivedAction } from "../actions";
@@ -21,52 +21,39 @@ export function CustomerRowMenu({
   canDelete: boolean;
 }) {
   const items: RowMenuItem[] = [
-    {
-      type: "link",
-      label: "ახალი ოპერაცია",
-      href: `${storeHref(storeId, "operations/new")}?customer=${customerId}`,
-      icon: <ReceiptText />,
-    },
-    {
-      type: "link",
-      label: "ახალი შეკვეთა",
-      href: `${storeHref(storeId, "orders/new")}?customer=${customerId}`,
-      icon: <ClipboardList />,
-    },
+    // A customer in the trash can't get new operations or orders — restore first.
+    ...(archived
+      ? []
+      : ([
+          {
+            type: "link",
+            label: "ახალი ოპერაცია",
+            href: `${storeHref(storeId, "operations/new")}?customer=${customerId}`,
+            icon: <ReceiptText />,
+          },
+          {
+            type: "link",
+            label: "ახალი შეკვეთა",
+            href: `${storeHref(storeId, "orders/new")}?customer=${customerId}`,
+            icon: <ClipboardList />,
+          },
+        ] satisfies RowMenuItem[])),
     { type: "link", label: "რედაქტირება", href: storeHref(storeId, `customers/${customerId}/edit`), icon: <Pencil /> },
     { type: "separator" },
-    archived
-      ? {
-          type: "action",
-          label: "აღდგენა",
-          icon: <ArchiveRestore />,
-          run: () => setCustomerArchivedAction(storeId, customerId, false),
-        }
-      : {
-          type: "action",
-          label: "სანაგვეში გადატანა",
-          icon: <Archive />,
-          run: () => setCustomerArchivedAction(storeId, customerId, true),
-          confirm: {
-            title: `${name} — სანაგვეში გადატანა?`,
-            description: "კლიენტი გაქრება სიიდან, მაგრამ ისტორია და ვალი შენარჩუნდება. ნებისმიერ დროს შეგიძლიათ აღადგინოთ.",
-            confirmLabel: "გადატანა",
-          },
-        },
+    ...archiveMenuItems({
+      name,
+      archived,
+      archive: () => setCustomerArchivedAction(storeId, customerId, true),
+      restore: () => setCustomerArchivedAction(storeId, customerId, false),
+      archiveDescription:
+        "კლიენტი გაქრება სიიდან, მაგრამ ისტორია და ვალი შენარჩუნდება. ნებისმიერ დროს შეგიძლიათ აღადგინოთ.",
+      remove: canDelete
+        ? {
+            run: () => deleteCustomerAction(storeId, customerId),
+            description: "წაიშლება მხოლოდ თუ კლიენტს არცერთი ოპერაცია ან შეკვეთა არ აქვს.",
+          }
+        : undefined,
+    }),
   ];
-  if (archived && canDelete) {
-    items.push({
-      type: "action",
-      label: "სამუდამოდ წაშლა",
-      icon: <Trash2 />,
-      destructive: true,
-      run: () => deleteCustomerAction(storeId, customerId),
-      confirm: {
-        title: `${name} — სამუდამოდ წაშლა?`,
-        description: "წაიშლება მხოლოდ თუ კლიენტს არცერთი ოპერაცია ან შეკვეთა არ აქვს.",
-        confirmLabel: "წაშლა",
-      },
-    });
-  }
-  return <RowMenu items={items} />;
+  return <RowMenu items={items} label={`${name} — მოქმედებები`} />;
 }

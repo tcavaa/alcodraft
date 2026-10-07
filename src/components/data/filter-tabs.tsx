@@ -14,7 +14,7 @@ export function FilterTabs({
   pathname: string;
   searchParams: SearchParams;
   param: string;
-  options: { value: string; label: string; count?: number }[];
+  options: { value: string; label: string; count?: number | string }[];
   value: string;
 }) {
   return (

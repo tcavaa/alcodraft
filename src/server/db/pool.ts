@@ -15,7 +15,7 @@ export function createPool(connectionString: string | undefined, options: pg.Poo
   // Discrete fields (not a URL) so passwords with @ # / ? % work without encoding.
   const c = parseConnectionString(connectionString);
   const isLocal = c.host === "localhost" || c.host === "127.0.0.1";
-  return new pg.Pool({
+  const pool = new pg.Pool({
     host: c.host,
     port: c.port,
     user: c.user,
@@ -26,4 +26,9 @@ export function createPool(connectionString: string | undefined, options: pg.Poo
     connectionTimeoutMillis: 10_000,
     ...options,
   });
+  // A dropped connection (pooler restart, network blip) emits "error". Without a listener Node
+  // treats it as uncaught and the whole server instance dies; the failing query rejects anyway.
+  pool.on("error", (error) => console.error("[db] idle connection error:", error.message));
+  pool.on("connect", (client) => client.on("error", (error) => console.error("[db] connection error:", error.message)));
+  return pool;
 }

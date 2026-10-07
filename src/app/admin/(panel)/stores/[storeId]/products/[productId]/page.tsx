@@ -1,10 +1,11 @@
-import { Archive, ArrowDownLeft, ArrowUpRight, CheckCircle2, SlidersHorizontal } from "lucide-react";
+import { Archive, ArrowDownLeft, ArrowUpRight, SlidersHorizontal } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { SortableHead } from "@/components/data/sortable-head";
 import { Money } from "@/components/money";
+import { Notice } from "@/components/notice";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,7 +18,7 @@ import { getProduct, listSupplierOptions } from "@/features/products/queries";
 import { formatDate } from "@/lib/dates";
 import { dec, formatQty } from "@/lib/money";
 import { storeHref } from "@/lib/routes";
-import { param, sortParam } from "@/lib/search-params";
+import { idParam, param, sortParam } from "@/lib/search-params";
 import { sortRows } from "@/lib/sort";
 import { cn } from "@/lib/utils";
 import { requireStore } from "@/server/auth/dal";
@@ -27,7 +28,7 @@ export const metadata: Metadata = { title: "პროდუქტი" };
 export default async function ProductPage({ params, searchParams }: PageProps<"/admin/stores/[storeId]/products/[productId]">) {
   const { storeId, productId } = await params;
   const { store, user } = await requireStore(storeId);
-  const [data, suppliers] = await Promise.all([getProduct(store.id, Number(productId)), listSupplierOptions(store.id)]);
+  const [data, suppliers] = await Promise.all([getProduct(store.id, idParam(productId)), listSupplierOptions(store.id)]);
   if (!data) notFound();
   const sp = await searchParams;
   const { product: p, movements } = data;
@@ -58,12 +59,7 @@ export default async function ProductPage({ params, searchParams }: PageProps<"/
           <ProductRowMenu storeId={store.id} productId={p.id} name={p.name} archived={p.isArchived} canDelete={user.role === "super_admin"} />
         }
       />
-      {param(sp, "created") ? (
-        <div className="mb-5 flex items-center gap-2 rounded-xl border border-success/30 bg-success/10 px-4 py-3 text-sm text-success">
-          <CheckCircle2 className="size-4" />
-          პროდუქტი დაემატა. მარაგის დასამატებლად გამოიყენეთ „მიღება“.
-        </div>
-      ) : null}
+      {param(sp, "created") ? <Notice>პროდუქტი დაემატა. მარაგის დასამატებლად გამოიყენეთ „მიღება“.</Notice> : null}
 
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)]">
         <Card>
@@ -72,8 +68,8 @@ export default async function ProductPage({ params, searchParams }: PageProps<"/
             <CardDescription>ფასის შეცვლისას ძველი ფასები ინახება ცვლილების ისტორიაში.</CardDescription>
           </CardHeader>
           <CardContent>
+            {/* No remount after saving: the fields keep the saved values and the "saved" toast can show. */}
             <ProductForm
-              key={`${p.salePrice}-${p.purchasePrice}-${p.updatedAt.getTime()}`}
               action={updateProductAction.bind(null, store.id, p.id)}
               suppliers={suppliers}
               defaults={p}

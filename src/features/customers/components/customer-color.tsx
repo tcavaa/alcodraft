@@ -17,7 +17,7 @@ import { setCustomerColorAction } from "../actions";
 
 export type CustomerColor = "green" | "yellow" | "red" | null;
 
-export const COLOR_DOT: Record<"green" | "yellow" | "red", string> = {
+const COLOR_DOT: Record<"green" | "yellow" | "red", string> = {
   green: "bg-emerald-500",
   yellow: "bg-amber-400",
   red: "bg-rose-500",

@@ -67,12 +67,13 @@ export function ParamCombobox({
             aria-label={label}
             className={cn(
               "h-9 w-full justify-start gap-1.5 bg-card px-3 font-normal shadow-none",
-              selected && "pr-14",
+              value && "pr-14",
               pending && "opacity-70",
             )}
           >
             <span className="shrink-0 text-muted-foreground">{label}:</span>
-            <span className={cn("truncate", !selected && "text-foreground")}>{selected?.label ?? allLabel}</span>
+            {/* A filter set by a link can point outside the options (e.g. no history yet): show its id. */}
+            <span className={cn("truncate", !selected && "text-foreground")}>{selected?.label ?? (value ? `#${value}` : allLabel)}</span>
             <ChevronsUpDown className="ml-auto size-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>
@@ -105,7 +106,7 @@ export function ParamCombobox({
           </Command>
         </PopoverContent>
       </Popover>
-      {selected ? (
+      {value ? (
         <Button
           variant="ghost"
           size="icon-xs"

@@ -5,8 +5,12 @@ import {
   computeFinalLines,
   computeLines,
   debtAfter,
+  groupStoredLines,
+  legacyCashEffect,
   leftoverValue,
   paymentHitsCashBook,
+  planLineEdit,
+  type StoredLine,
   stockDeltas,
   totalOf,
 } from "./logic";
@@ -73,5 +77,99 @@ describe("cash book", () => {
     expect(paymentHitsCashBook("back", "10")).toBe(false);
     expect(paymentHitsCashBook("cash", "0")).toBe(false);
     expect(paymentHitsCashBook(null, "10")).toBe(false);
+  });
+});
+
+describe("legacyCashEffect (imported operations without a linked cash entry)", () => {
+  it("counts every payment except 'back' as booked, also when the old app saved no method", () => {
+    expect(legacyCashEffect("cash", "30").toString()).toBe("30");
+    expect(legacyCashEffect(null, "30").toString()).toBe("30");
+    expect(legacyCashEffect("back", "30").toString()).toBe("0");
+  });
+});
+
+describe("planLineEdit (editing a saved operation / order)", () => {
+  // An imported operation: stored total 500 but rows add up to 480 (old edit page left it stale),
+  // a product split over two rows, a line total that isn't price × qty, and a money-only row.
+  const stored: StoredLine[] = [
+    { id: 1, productId: 10, unitPrice: "17", quantity: 10, giftQty: 0, leftoverQty: 0, lineTotal: "170" },
+    { id: 2, productId: 10, unitPrice: "17", quantity: 5, giftQty: 1, leftoverQty: 0, lineTotal: "85" },
+    { id: 3, productId: 20, unitPrice: "20", quantity: 10, giftQty: 0, leftoverQty: 2, lineTotal: "205" },
+    { id: 4, productId: 30, unitPrice: "5", quantity: 0, giftQty: 0, leftoverQty: 0, lineTotal: "20" },
+  ];
+  const asShown = [
+    { productId: 10, unitPrice: "17", quantity: 15, giftQty: 1, leftoverQty: 0 },
+    { productId: 20, unitPrice: "20.0000", quantity: 10, giftQty: 0, leftoverQty: 2 },
+    { productId: 30, unitPrice: "5", quantity: 0, giftQty: 0, leftoverQty: 0 },
+  ];
+
+  it("groups saved rows per product the way the form shows them", () => {
+    const views = groupStoredLines(stored);
+    expect(views.get(10)).toMatchObject({ quantity: 15, giftQty: 1 });
+    expect(views.get(10)!.lineTotal.toString()).toBe("255");
+    expect(views.get(10)!.rows.map((r) => r.id)).toEqual([1, 2]);
+  });
+
+  it("keeps everything as saved when only the comment changed", () => {
+    const plan = planLineEdit(stored, asShown, "500");
+    expect(plan.keep.map((r) => r.id)).toEqual([1, 2, 3, 4]);
+    expect(plan.remove).toEqual([]);
+    expect(plan.add).toEqual([]);
+    expect(plan.total.toString()).toBe("500"); // not Σ rows (480): the customer's debt doesn't move
+  });
+
+  it("treats products left out of the submission as unchanged", () => {
+    expect(planLineEdit(stored, [], "500").total.toString()).toBe("500");
+  });
+
+  it("replaces only the changed product and keeps the old difference in the total", () => {
+    const plan = planLineEdit(
+      stored,
+      asShown.map((l) => (l.productId === 20 ? { ...l, quantity: 8 } : l)),
+      "500",
+    );
+    expect(plan.keep.map((r) => r.id)).toEqual([1, 2, 4]);
+    expect(plan.remove.map((r) => r.id)).toEqual([3]);
+    expect(plan.add).toHaveLength(1);
+    expect(plan.add[0].lineTotal.toString()).toBe("160"); // 8 × 20
+    expect(plan.total.toString()).toBe("455"); // 500 − 205 + 160
+    expect([...stockDeltas(plan.remove, 1)]).toEqual([[20, 10]]);
+  });
+
+  it("merges a split product into one row once it is edited", () => {
+    const plan = planLineEdit(
+      stored,
+      asShown.map((l) => (l.productId === 10 ? { ...l, quantity: 14 } : l)),
+      "500",
+    );
+    expect(plan.remove.map((r) => r.id)).toEqual([1, 2]);
+    expect(plan.add).toHaveLength(1);
+    expect(plan.add[0]).toMatchObject({ productId: 10, quantity: 14, giftQty: 1 });
+    expect(plan.total.toString()).toBe("483"); // 500 − 255 + 238
+  });
+
+  it("removes a cleared product and adds a new one", () => {
+    const plan = planLineEdit(
+      stored,
+      [
+        ...asShown.filter((l) => l.productId !== 30),
+        { productId: 30, unitPrice: "5", quantity: 0, giftQty: 0, leftoverQty: 0 },
+        { productId: 40, unitPrice: "9.5", quantity: 2, giftQty: 0, leftoverQty: 0 },
+      ].map((l) => (l.productId === 20 ? { ...l, quantity: 0, leftoverQty: 0 } : l)),
+      "500",
+    );
+    expect(plan.remove.map((r) => r.id)).toEqual([3]);
+    expect(plan.add.map((l) => l.productId)).toEqual([40]); // product 20 cleared → no row
+    expect(plan.total.toString()).toBe("314"); // 500 − 205 + 19
+  });
+
+  it("re-prices a product only when its price is changed", () => {
+    const plan = planLineEdit(
+      stored,
+      asShown.map((l) => (l.productId === 20 ? { ...l, unitPrice: "21" } : l)),
+      "500",
+    );
+    expect(plan.add[0].lineTotal.toString()).toBe("210");
+    expect(plan.total.toString()).toBe("505");
   });
 });

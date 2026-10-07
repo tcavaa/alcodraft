@@ -139,6 +139,8 @@ export const orders = app
       uniqueIndex().on(t.storeId, t.number),
       index().on(t.storeId, t.status, t.id),
       index().on(t.customerId),
+      // Operation page: "created from order #…"; deleting an operation reopens its order.
+      index().on(t.deliveryId),
     ],
   )
   .enableRLS();

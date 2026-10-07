@@ -15,6 +15,13 @@
       "when": 1791328202062,
       "tag": "0001_lock_down_app_schema",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791334974992,
+      "tag": "0002_orders_delivery_index",
+      "breakpoints": true
     }
   ]
 }

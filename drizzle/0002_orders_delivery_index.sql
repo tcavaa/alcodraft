@@ -1,0 +1,1 @@
+CREATE INDEX "orders_delivery_id_index" ON "app"."orders" USING btree ("delivery_id");

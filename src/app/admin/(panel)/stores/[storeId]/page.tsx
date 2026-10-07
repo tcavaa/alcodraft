@@ -135,7 +135,7 @@ export default async function StoreDashboardPage({ params }: PageProps<"/admin/s
                 <CardDescription>აქტიური კლიენტები</CardDescription>
               </div>
               <Button variant="ghost" size="sm" asChild>
-                <Link href={`${href("customers")}?sort=debt`}>
+                <Link href={`${href("customers")}?sort=-debt`}>
                   ყველა <ArrowRight />
                 </Link>
               </Button>

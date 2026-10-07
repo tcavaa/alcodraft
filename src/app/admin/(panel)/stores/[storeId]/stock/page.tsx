@@ -6,17 +6,18 @@ import { DateRangeFilter } from "@/components/data/date-range-filter";
 import { Pagination } from "@/components/data/pagination";
 import { ParamSelect } from "@/components/data/param-select";
 import { SearchInput } from "@/components/data/search-input";
+import { SortableHead } from "@/components/data/sortable-head";
 import { EmptyState } from "@/components/empty-state";
 import { Money } from "@/components/money";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { listSupplierOptions } from "@/features/products/queries";
-import { listReceipts } from "@/features/stock/queries";
+import { listReceipts, RECEIPT_SORTS } from "@/features/stock/queries";
 import { formatDate, isIsoDate } from "@/lib/dates";
 import { formatQty } from "@/lib/money";
 import { storeHref } from "@/lib/routes";
-import { intParam, pageParam, param } from "@/lib/search-params";
+import { intParam, pageParam, param, sortParam } from "@/lib/search-params";
 import { requireStore } from "@/server/auth/dal";
 
 export const metadata: Metadata = { title: "საწყობი — მიღებები" };
@@ -37,6 +38,7 @@ export default async function StockPage({ params, searchParams }: PageProps<"/ad
       from: from && isIsoDate(from) ? from : undefined,
       to: to && isIsoDate(to) ? to : undefined,
       q: param(sp, "q"),
+      sort: sortParam(sp, RECEIPT_SORTS),
       page,
       pageSize: PAGE_SIZE,
     }),
@@ -79,12 +81,22 @@ export default async function StockPage({ params, searchParams }: PageProps<"/ad
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
-                <TableHead>თარიღი</TableHead>
-                <TableHead>მომწოდებელი</TableHead>
-                <TableHead className="hidden lg:table-cell">კომენტარი</TableHead>
-                <TableHead className="text-right">პროდუქტი</TableHead>
-                <TableHead className="text-right">ცალი</TableHead>
-                <TableHead className="text-right">ღირებულება</TableHead>
+                <SortableHead column="date" first="desc">
+                  თარიღი
+                </SortableHead>
+                <SortableHead column="supplier">მომწოდებელი</SortableHead>
+                <SortableHead column="comment" className="hidden lg:table-cell">
+                  კომენტარი
+                </SortableHead>
+                <SortableHead column="lines" className="text-right">
+                  პროდუქტი
+                </SortableHead>
+                <SortableHead column="quantity" className="text-right">
+                  ცალი
+                </SortableHead>
+                <SortableHead column="cost" className="text-right">
+                  ღირებულება
+                </SortableHead>
               </TableRow>
             </TableHeader>
             <TableBody>

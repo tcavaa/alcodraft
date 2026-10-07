@@ -2,17 +2,21 @@ import "server-only";
 
 import { and, asc, count, desc, eq, ilike, max, or, sql, type SQL } from "drizzle-orm";
 
+import type { SortState } from "@/lib/sort";
 import { db } from "@/server/db";
+import { by } from "@/server/db/order";
 import { customers, deliveries, deliveryItems, orders, products } from "@/server/db/schema";
 
 import { debtExpr } from "../dashboard/queries";
 
-export type CustomerSort = "name" | "debt" | "recent" | "color";
+export const CUSTOMER_SORTS = ["color", "name", "comment", "debt", "last"] as const;
+export type CustomerSort = (typeof CUSTOMER_SORTS)[number];
 
 export interface CustomerListParams {
   q?: string;
   archived: boolean;
-  sort: CustomerSort;
+  /** null = by name (default). */
+  sort: SortState<CustomerSort> | null;
   color?: "green" | "yellow" | "red";
   page: number;
   pageSize: number;
@@ -51,15 +55,24 @@ export async function listCustomers(storeId: number, p: CustomerListParams) {
   const where = and(...conditions);
   const debt = sql<string>`coalesce(${stats.debt}, 0)`;
 
-  const order = {
-    name: [asc(customers.name)],
-    debt: [desc(debt), asc(customers.name)],
-    recent: [sql`${stats.lastDate} desc nulls last`, asc(customers.name)],
-    color: [
-      sql`case ${customers.color} when 'red' then 0 when 'yellow' then 1 when 'green' then 2 else 3 end`,
-      asc(customers.name),
-    ],
-  }[p.sort];
+  const s = p.sort;
+  const order = !s
+    ? [asc(customers.name), asc(customers.id)]
+    : [
+        by(
+          {
+            // red → yellow → green; customers without a colour last
+            color: sql`case ${customers.color} when 'red' then 0 when 'yellow' then 1 when 'green' then 2 end`,
+            name: customers.name,
+            comment: sql`nullif(${customers.comment}, '')`,
+            debt,
+            last: stats.lastDate,
+          }[s.column],
+          s.dir,
+        ),
+        asc(customers.name),
+        asc(customers.id),
+      ];
 
   const [rows, [totals]] = await Promise.all([
     db
@@ -131,7 +144,15 @@ export async function getCustomer(storeId: number, customerId: number) {
 }
 
 /** Old distribution/index: every operation with the debt right after it. */
-export async function listCustomerDeliveries(customerId: number, page: number, pageSize: number) {
+export const CUSTOMER_OPERATION_SORTS = ["date", "number", "kind", "total", "paid", "method", "debt", "comment"] as const;
+export type CustomerOperationSort = (typeof CUSTOMER_OPERATION_SORTS)[number];
+
+export async function listCustomerDeliveries(
+  customerId: number,
+  page: number,
+  pageSize: number,
+  sort: SortState<CustomerOperationSort> | null = null,
+) {
   const running = db
     .select({
       id: deliveries.id,
@@ -151,11 +172,31 @@ export async function listCustomerDeliveries(customerId: number, page: number, p
     .from(deliveries)
     .where(eq(deliveries.customerId, customerId))
     .as("running");
+  const order = !sort
+    ? [desc(running.id)]
+    : sort.column === "date"
+      ? [by(running.date, sort.dir), by(running.id, sort.dir)]
+      : [
+          by(
+            {
+              number: running.number,
+              // the same three kinds the table shows: delivery, payment only, correction
+              kind: sql`case when ${running.kind} = 'adjustment' then 2 when ${running.total} = 0 and ${running.paid} <> 0 then 1 else 0 end`,
+              total: running.total,
+              paid: running.paid,
+              method: running.method,
+              debt: running.debtAfter,
+              comment: sql`nullif(${running.comment}, '')`,
+            }[sort.column],
+            sort.dir,
+          ),
+          desc(running.id),
+        ];
   const [rows, [{ total }]] = await Promise.all([
     db
       .select()
       .from(running)
-      .orderBy(desc(running.id))
+      .orderBy(...order)
       .limit(pageSize)
       .offset((page - 1) * pageSize),
     db.select({ total: count() }).from(deliveries).where(eq(deliveries.customerId, customerId)),

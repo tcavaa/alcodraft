@@ -2,7 +2,9 @@ import "server-only";
 
 import { and, asc, count, desc, eq, gte, ilike, inArray, lte, or, sql, type SQL } from "drizzle-orm";
 
+import type { SortState } from "@/lib/sort";
 import { db } from "@/server/db";
+import { by } from "@/server/db/order";
 import {
   customers,
   deliveries,
@@ -43,12 +45,17 @@ function runningDeliveries(storeId: number) {
     .as("running");
 }
 
+export const OPERATION_SORTS = ["date", "customer", "paid", "method", "debt", "total"] as const;
+export type OperationSort = (typeof OPERATION_SORTS)[number];
+
 export interface OperationListParams {
   q?: string;
+  customerId?: number;
   from?: string;
   to?: string;
   method?: "cash" | "card" | "back";
   kind?: "delivery" | "payment" | "adjustment";
+  sort: SortState<OperationSort> | null;
   page: number;
   pageSize: number;
 }
@@ -63,6 +70,7 @@ export async function listOperations(storeId: number, p: OperationListParams) {
       or(ilike(customers.name, like), ilike(running.comment, like), sql`${running.number}::text = ${p.q}`),
     );
   }
+  if (p.customerId) conditions.push(eq(running.customerId, p.customerId));
   if (p.from) conditions.push(gte(running.date, p.from));
   if (p.to) conditions.push(lte(running.date, p.to));
   if (p.method) conditions.push(eq(running.method, p.method));
@@ -70,6 +78,21 @@ export async function listOperations(storeId: number, p: OperationListParams) {
   if (p.kind === "payment") conditions.push(and(eq(running.kind, "delivery"), sql`${running.total} = 0`, sql`${running.paid} <> 0`));
   if (p.kind === "delivery") conditions.push(and(eq(running.kind, "delivery"), sql`not (${running.total} = 0 and ${running.paid} <> 0)`));
   const where = conditions.length ? and(...conditions) : undefined;
+  const s = p.sort;
+  // Every order ends with the id, so pages never overlap or skip rows.
+  const order = !s
+    ? [desc(running.id)]
+    : s.column === "date"
+      ? [by(running.date, s.dir), by(running.id, s.dir)]
+      : [
+          by(
+            { customer: customers.name, paid: running.paid, method: running.method, debt: running.debtAfter, total: running.total }[
+              s.column
+            ],
+            s.dir,
+          ),
+          desc(running.id),
+        ];
 
   const [rows, [totals]] = await Promise.all([
     db
@@ -91,7 +114,7 @@ export async function listOperations(storeId: number, p: OperationListParams) {
       .from(running)
       .innerJoin(customers, eq(customers.id, running.customerId))
       .where(where)
-      .orderBy(desc(running.id))
+      .orderBy(...order)
       .limit(p.pageSize)
       .offset((p.page - 1) * p.pageSize),
     db
@@ -222,9 +245,14 @@ export async function listCustomerOptionsWithDebt(storeId: number): Promise<Cust
 
 // ── Orders ──────────────────────────────────────────────────────────────────
 
+export const ORDER_SORTS = ["date", "customer", "store", "paid", "debt", "total", "comment", "status", "waybill"] as const;
+export type OrderSort = (typeof ORDER_SORTS)[number];
+
 export interface OrderListParams {
   status: "open" | "history";
   q?: string;
+  customerId?: number;
+  sort: SortState<OrderSort> | null;
   page: number;
   pageSize: number;
 }
@@ -233,10 +261,23 @@ const customerDebtSql = sql<string>`(select coalesce(sum(d.total_amount - d.paid
 
 /** Old orders/index (open) and orders/ordershistory (completed + cancelled). */
 export async function listOrders(storeIds: number[], p: OrderListParams) {
+  const ids = storeIds.length ? storeIds : [0];
+  // Every customer's current debt in one grouped pass (a per-row subquery took seconds when sorting).
+  const debts = db
+    .select({
+      customerId: deliveries.customerId,
+      debt: sql<string>`sum(${deliveries.totalAmount} - ${deliveries.paidAmount} + ${deliveries.adjustmentAmount})`.as("debt"),
+    })
+    .from(deliveries)
+    .where(inArray(deliveries.storeId, ids))
+    .groupBy(deliveries.customerId)
+    .as("debts");
+  const currentDebt = sql<string>`coalesce(${debts.debt}, 0)`;
   const conditions: (SQL | undefined)[] = [
-    inArray(orders.storeId, storeIds.length ? storeIds : [0]),
+    inArray(orders.storeId, ids),
     p.status === "open" ? eq(orders.status, "open") : sql`${orders.status} <> 'open'`,
   ];
+  if (p.customerId) conditions.push(eq(orders.customerId, p.customerId));
   if (p.q) {
     const like = likeEscape(p.q);
     conditions.push(
@@ -244,6 +285,28 @@ export async function listOrders(storeIds: number[], p: OrderListParams) {
     );
   }
   const where = and(...conditions);
+  const s = p.sort;
+  const order = !s
+    ? [desc(orders.orderDate), desc(orders.id)]
+    : s.column === "date"
+      ? [by(orders.orderDate, s.dir), by(orders.id, s.dir)]
+      : [
+          by(
+            {
+              customer: customers.name,
+              store: stores.name,
+              paid: orders.paidAmount,
+              debt: currentDebt,
+              total: orders.totalAmount,
+              comment: sql`nullif(${orders.comment}, '')`,
+              status: orders.uploadStatus,
+              waybill: orders.hasWaybill,
+            }[s.column],
+            s.dir,
+          ),
+          desc(orders.orderDate),
+          desc(orders.id),
+        ];
   const [rows, [totals]] = await Promise.all([
     db
       .select({
@@ -264,13 +327,14 @@ export async function listOrders(storeIds: number[], p: OrderListParams) {
         customerId: customers.id,
         customerName: customers.name,
         customerAddress: customers.address,
-        currentDebt: customerDebtSql,
+        currentDebt,
       })
       .from(orders)
       .innerJoin(customers, eq(customers.id, orders.customerId))
       .innerJoin(stores, eq(stores.id, orders.storeId))
+      .leftJoin(debts, eq(debts.customerId, orders.customerId))
       .where(where)
-      .orderBy(desc(orders.orderDate), desc(orders.id))
+      .orderBy(...order)
       .limit(p.pageSize)
       .offset((p.page - 1) * p.pageSize),
     db
@@ -284,6 +348,43 @@ export async function listOrders(storeIds: number[], p: OrderListParams) {
       .where(where),
   ]);
   return { rows, ...totals };
+}
+
+export interface CustomerFilterOption {
+  id: number;
+  name: string;
+  address: string;
+  isArchived: boolean;
+  storeName: string;
+}
+
+/**
+ * Customers for the "კლიენტი" filter: only those that have operations (or orders / open orders)
+ * in the given stores, active ones first.
+ */
+export async function listCustomerFilterOptions(
+  storeIds: number[],
+  source: "deliveries" | "orders" | "open-orders",
+): Promise<CustomerFilterOption[]> {
+  if (storeIds.length === 0) return [];
+  const has =
+    source === "deliveries"
+      ? sql`exists (select 1 from ${deliveries} where ${deliveries.customerId} = ${customers.id})`
+      : source === "orders"
+        ? sql`exists (select 1 from ${orders} where ${orders.customerId} = ${customers.id})`
+        : sql`exists (select 1 from ${orders} where ${orders.customerId} = ${customers.id} and ${orders.status} = 'open')`;
+  return db
+    .select({
+      id: customers.id,
+      name: customers.name,
+      address: customers.address,
+      isArchived: customers.isArchived,
+      storeName: stores.name,
+    })
+    .from(customers)
+    .innerJoin(stores, eq(stores.id, customers.storeId))
+    .where(and(inArray(customers.storeId, storeIds), has))
+    .orderBy(asc(customers.isArchived), asc(customers.name), asc(customers.id));
 }
 
 export async function getOrder(storeId: number, orderId: number) {

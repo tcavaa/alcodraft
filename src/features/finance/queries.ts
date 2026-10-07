@@ -2,7 +2,9 @@ import "server-only";
 
 import { and, asc, count, desc, eq, gte, ilike, lte, or, sql, type SQL } from "drizzle-orm";
 
+import type { SortState } from "@/lib/sort";
 import { db } from "@/server/db";
+import { by } from "@/server/db/order";
 import {
   deliveries,
   employees,
@@ -33,11 +35,15 @@ export async function listAccounts(storeId: number) {
     .orderBy(desc(financeAccounts.isDefault), asc(financeAccounts.sortOrder), asc(financeAccounts.id));
 }
 
+export const ENTRY_SORTS = ["date", "out", "in", "balance", "comment"] as const;
+export type EntrySort = (typeof ENTRY_SORTS)[number];
+
 export interface EntryListParams {
   q?: string;
   from?: string;
   to?: string;
   direction?: "in" | "out";
+  sort: SortState<EntrySort> | null;
   page: number;
   pageSize: number;
 }
@@ -77,6 +83,24 @@ export async function listEntries(accountId: number, p: EntryListParams) {
   if (p.direction === "in") conditions.push(sql`${running.amountIn} <> 0`);
   if (p.direction === "out") conditions.push(sql`${running.amountOut} <> 0`);
   const where = conditions.length ? and(...conditions) : undefined;
+  const s = p.sort;
+  const order = !s
+    ? [desc(running.id)]
+    : s.column === "date"
+      ? [by(running.date, s.dir), by(running.id, s.dir)]
+      : [
+          by(
+            {
+              // rows without an expense / income count as empty, so they stay last
+              out: sql`nullif(${running.amountOut}, 0)`,
+              in: sql`nullif(${running.amountIn}, 0)`,
+              balance: running.balanceAfter,
+              comment: sql`nullif(${running.description}, '')`,
+            }[s.column],
+            s.dir,
+          ),
+          desc(running.id),
+        ];
 
   const [rows, [totals]] = await Promise.all([
     db
@@ -104,7 +128,7 @@ export async function listEntries(accountId: number, p: EntryListParams) {
       .leftJoin(employees, eq(employees.id, running.employeeId))
       .leftJoin(users, eq(users.id, running.createdById))
       .where(where)
-      .orderBy(desc(running.id))
+      .orderBy(...order)
       .limit(p.pageSize)
       .offset((p.page - 1) * p.pageSize),
     db

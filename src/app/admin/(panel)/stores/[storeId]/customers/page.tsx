@@ -1,4 +1,4 @@
-import { Plus, Users } from "lucide-react";
+import { Palette, Plus, Users } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -6,6 +6,7 @@ import { FilterTabs } from "@/components/data/filter-tabs";
 import { Pagination } from "@/components/data/pagination";
 import { ParamSelect } from "@/components/data/param-select";
 import { SearchInput } from "@/components/data/search-input";
+import { SortableHead } from "@/components/data/sortable-head";
 import { EmptyState } from "@/components/empty-state";
 import { Money } from "@/components/money";
 import { PageHeader } from "@/components/page-header";
@@ -14,29 +15,23 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { COLOR_ROW, CustomerColorPicker } from "@/features/customers/components/customer-color";
 import { CustomerComment } from "@/features/customers/components/customer-comment";
 import { CustomerRowMenu } from "@/features/customers/components/customer-row-menu";
-import { countCustomers, type CustomerSort, listCustomers } from "@/features/customers/queries";
+import { countCustomers, CUSTOMER_SORTS, listCustomers } from "@/features/customers/queries";
 import { formatDate } from "@/lib/dates";
 import { storeHref } from "@/lib/routes";
-import { pageParam, param } from "@/lib/search-params";
+import { pageParam, param, sortParam } from "@/lib/search-params";
 import { cn } from "@/lib/utils";
 import { requireStore } from "@/server/auth/dal";
 
 export const metadata: Metadata = { title: "კლიენტები" };
 
 const PAGE_SIZE = 100;
-const SORTS: { value: CustomerSort; label: string }[] = [
-  { value: "name", label: "სახელით" },
-  { value: "debt", label: "ვალით" },
-  { value: "recent", label: "ბოლო ოპერაციით" },
-  { value: "color", label: "ფერით" },
-];
 
 export default async function CustomersPage({ params, searchParams }: PageProps<"/admin/stores/[storeId]/customers">) {
   const { storeId } = await params;
   const { store, user } = await requireStore(storeId);
   const sp = await searchParams;
   const archived = param(sp, "archived") === "1";
-  const sort = (SORTS.find((s) => s.value === param(sp, "sort"))?.value ?? "name") as CustomerSort;
+  const sort = sortParam(sp, CUSTOMER_SORTS);
   const colorParam = param(sp, "color");
   const color = colorParam === "green" || colorParam === "yellow" || colorParam === "red" ? colorParam : undefined;
   const page = pageParam(sp);
@@ -78,21 +73,18 @@ export default async function CustomersPage({ params, searchParams }: PageProps<
             ]}
           />
         </div>
-        <div className="flex gap-2">
-          <ParamSelect
-            param="color"
-            value={color ?? "all"}
-            label="ფერი"
-            className="w-40"
-            options={[
-              { value: "all", label: "ყველა" },
-              { value: "red", label: "წითელი" },
-              { value: "yellow", label: "ყვითელი" },
-              { value: "green", label: "მწვანე" },
-            ]}
-          />
-          <ParamSelect param="sort" value={sort} label="დალაგება" className="w-52" options={SORTS} />
-        </div>
+        <ParamSelect
+          param="color"
+          value={color ?? "all"}
+          label="ფერი"
+          className="w-40"
+          options={[
+            { value: "all", label: "ყველა" },
+            { value: "red", label: "წითელი" },
+            { value: "yellow", label: "ყვითელი" },
+            { value: "green", label: "მწვანე" },
+          ]}
+        />
       </div>
 
       {list.rows.length === 0 ? (
@@ -106,11 +98,19 @@ export default async function CustomersPage({ params, searchParams }: PageProps<
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
-                <TableHead className="w-10" />
-                <TableHead>დასახელება</TableHead>
-                <TableHead className="hidden lg:table-cell">კომენტარი</TableHead>
-                <TableHead className="text-right">დარჩენილი (ვალი)</TableHead>
-                <TableHead className="hidden text-right md:table-cell">ბოლო ოპერაცია</TableHead>
+                <SortableHead column="color" first="asc" className="w-14 pr-0">
+                  <Palette className="size-3.5" aria-label="ფერი" />
+                </SortableHead>
+                <SortableHead column="name">დასახელება</SortableHead>
+                <SortableHead column="comment" className="hidden lg:table-cell">
+                  კომენტარი
+                </SortableHead>
+                <SortableHead column="debt" className="text-right">
+                  დარჩენილი (ვალი)
+                </SortableHead>
+                <SortableHead column="last" className="hidden text-right md:table-cell">
+                  ბოლო ოპერაცია
+                </SortableHead>
                 <TableHead className="w-10" />
               </TableRow>
             </TableHeader>
@@ -120,12 +120,14 @@ export default async function CustomersPage({ params, searchParams }: PageProps<
                   <TableCell className="pr-0">
                     <CustomerColorPicker storeId={store.id} customerId={c.id} color={c.color} />
                   </TableCell>
-                  <TableCell className="max-w-[22rem]">
-                    <Link href={storeHref(store.id, `customers/${c.id}`)} className="font-medium hover:underline">
-                      {c.name}
-                    </Link>
-                    <div className="truncate text-xs text-muted-foreground">
-                      {[c.address, c.phone, c.contactPerson].filter(Boolean).join(" · ") || "—"}
+                  <TableCell>
+                    <div className="max-w-[22rem]">
+                      <Link href={storeHref(store.id, `customers/${c.id}`)} className="block truncate font-medium hover:underline" title={c.name}>
+                        {c.name}
+                      </Link>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {[c.address, c.phone, c.contactPerson].filter(Boolean).join(" · ") || "—"}
+                      </div>
                     </div>
                   </TableCell>
                   <TableCell className="hidden w-[34%] lg:table-cell">

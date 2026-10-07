@@ -5,6 +5,7 @@ import Link from "next/link";
 import { FilterTabs } from "@/components/data/filter-tabs";
 import { ParamSelect } from "@/components/data/param-select";
 import { SearchInput } from "@/components/data/search-input";
+import { SortableHead } from "@/components/data/sortable-head";
 import { EmptyState } from "@/components/empty-state";
 import { Money } from "@/components/money";
 import { PageHeader } from "@/components/page-header";
@@ -13,13 +14,16 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { ProductRowMenu } from "@/features/products/components/product-row-menu";
 import { countProducts, listProducts, listSupplierOptions } from "@/features/products/queries";
-import { formatQty } from "@/lib/money";
+import { dec, formatQty } from "@/lib/money";
 import { storeHref } from "@/lib/routes";
-import { intParam, param } from "@/lib/search-params";
+import { intParam, param, sortParam } from "@/lib/search-params";
+import { sortRows } from "@/lib/sort";
 import { cn } from "@/lib/utils";
 import { requireStore } from "@/server/auth/dal";
 
 export const metadata: Metadata = { title: "პროდუქცია" };
+
+const SORTS = ["name", "stock", "price", "purchase", "changed"] as const;
 
 export default async function ProductsPage({ params, searchParams }: PageProps<"/admin/stores/[storeId]/products">) {
   const { storeId } = await params;
@@ -27,11 +31,18 @@ export default async function ProductsPage({ params, searchParams }: PageProps<"
   const sp = await searchParams;
   const archived = param(sp, "archived") === "1";
   const supplierId = intParam(sp, "supplier");
-  const [rows, counts, suppliers] = await Promise.all([
+  const [list, counts, suppliers] = await Promise.all([
     listProducts(store.id, { q: param(sp, "q"), archived, supplierId }),
     countProducts(store.id),
     listSupplierOptions(store.id),
   ]);
+  const rows = sortRows(list, sortParam(sp, SORTS), {
+    name: (p) => p.name,
+    stock: (p) => p.stockQty,
+    price: (p) => dec(p.salePrice),
+    purchase: (p) => dec(p.purchasePrice),
+    changed: (p) => p.priceChanged,
+  });
   const pathname = storeHref(store.id, "products");
   const totalStock = rows.reduce((a, r) => a + r.stockQty, 0);
 
@@ -87,11 +98,19 @@ export default async function ProductsPage({ params, searchParams }: PageProps<"
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
-                <TableHead>დასახელება</TableHead>
-                <TableHead className="text-right">რაოდენობა</TableHead>
-                <TableHead className="text-right">ფასი</TableHead>
-                <TableHead className="text-right">შემოტანის ფასი</TableHead>
-                <TableHead className="hidden text-center md:table-cell">ცვლილება</TableHead>
+                <SortableHead column="name">დასახელება</SortableHead>
+                <SortableHead column="stock" className="text-right">
+                  რაოდენობა
+                </SortableHead>
+                <SortableHead column="price" className="text-right">
+                  ფასი
+                </SortableHead>
+                <SortableHead column="purchase" className="text-right">
+                  შემოტანის ფასი
+                </SortableHead>
+                <SortableHead column="changed" first="desc" className="hidden text-center md:table-cell">
+                  ცვლილება
+                </SortableHead>
                 <TableHead className="w-10" />
               </TableRow>
             </TableHeader>

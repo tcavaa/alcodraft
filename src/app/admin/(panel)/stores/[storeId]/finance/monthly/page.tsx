@@ -1,17 +1,21 @@
 import type { Metadata } from "next";
 
 import { FilterTabs } from "@/components/data/filter-tabs";
+import { SortableHead } from "@/components/data/sortable-head";
 import { Money } from "@/components/money";
 import { PageHeader } from "@/components/page-header";
-import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableFooter, TableHeader, TableRow } from "@/components/ui/table";
 import { listAccounts, monthlyReport } from "@/features/finance/queries";
 import { formatMonth } from "@/lib/dates";
 import { dec, sum } from "@/lib/money";
 import { storeHref } from "@/lib/routes";
-import { intParam } from "@/lib/search-params";
+import { intParam, sortParam } from "@/lib/search-params";
+import { sortRows } from "@/lib/sort";
 import { requireStore } from "@/server/auth/dal";
 
 export const metadata: Metadata = { title: "თვის ბრუნვა" };
+
+const SORTS = ["month", "out", "in", "net"] as const;
 
 /** Old finance/month: expense, income and income − expense per month. */
 export default async function MonthlyPage({ params, searchParams }: PageProps<"/admin/stores/[storeId]/finance/monthly">) {
@@ -20,7 +24,13 @@ export default async function MonthlyPage({ params, searchParams }: PageProps<"/
   const sp = await searchParams;
   const accounts = await listAccounts(store.id);
   const account = accounts.find((a) => a.id === intParam(sp, "account")) ?? accounts[0];
-  const rows = account ? await monthlyReport(account.id) : [];
+  const report = account ? await monthlyReport(account.id) : [];
+  const rows = sortRows(report, sortParam(sp, SORTS), {
+    month: (r) => r.month,
+    out: (r) => dec(r.out),
+    in: (r) => dec(r.in),
+    net: (r) => dec(r.in).minus(r.out),
+  });
   const totalOut = sum(rows.map((r) => r.out));
   const totalIn = sum(rows.map((r) => r.in));
 
@@ -47,10 +57,18 @@ export default async function MonthlyPage({ params, searchParams }: PageProps<"/
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
-              <TableHead>თარიღი (თვე)</TableHead>
-              <TableHead className="text-right">ხარჯი</TableHead>
-              <TableHead className="text-right">შემოსავალი</TableHead>
-              <TableHead className="text-right">შემოსავალი − ხარჯი</TableHead>
+              <SortableHead column="month" first="desc">
+                თარიღი (თვე)
+              </SortableHead>
+              <SortableHead column="out" className="text-right">
+                ხარჯი
+              </SortableHead>
+              <SortableHead column="in" className="text-right">
+                შემოსავალი
+              </SortableHead>
+              <SortableHead column="net" className="text-right">
+                შემოსავალი − ხარჯი
+              </SortableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

@@ -4,20 +4,22 @@ import Link from "next/link";
 
 import { DateRangeFilter } from "@/components/data/date-range-filter";
 import { Pagination } from "@/components/data/pagination";
+import { ParamCombobox } from "@/components/data/param-combobox";
 import { ParamSelect } from "@/components/data/param-select";
 import { SearchInput } from "@/components/data/search-input";
+import { SortableHead } from "@/components/data/sortable-head";
 import { EmptyState } from "@/components/empty-state";
 import { Money } from "@/components/money";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableFooter, TableHeader, TableRow } from "@/components/ui/table";
 import { OPERATION_KIND_LABEL, operationKind } from "@/features/sales/labels";
 import { paymentLabel } from "@/features/sales/logic";
-import { listOperations } from "@/features/sales/queries";
+import { listCustomerFilterOptions, listOperations, OPERATION_SORTS } from "@/features/sales/queries";
 import { formatDate, isIsoDate } from "@/lib/dates";
 import { storeHref } from "@/lib/routes";
-import { pageParam, param } from "@/lib/search-params";
+import { intParam, pageParam, param, sortParam } from "@/lib/search-params";
 import { requireStore } from "@/server/auth/dal";
 
 export const metadata: Metadata = { title: "ოპერაციები" };
@@ -36,15 +38,22 @@ export default async function OperationsPage({ params, searchParams }: PageProps
   const method = methodParam === "cash" || methodParam === "card" || methodParam === "back" ? methodParam : undefined;
   const kind = kindParam === "delivery" || kindParam === "payment" || kindParam === "adjustment" ? kindParam : undefined;
 
-  const list = await listOperations(store.id, {
-    q: param(sp, "q"),
-    from: from && isIsoDate(from) ? from : undefined,
-    to: to && isIsoDate(to) ? to : undefined,
-    method,
-    kind,
-    page,
-    pageSize: PAGE_SIZE,
-  });
+  const customerId = intParam(sp, "customer");
+
+  const [list, customerOptions] = await Promise.all([
+    listOperations(store.id, {
+      q: param(sp, "q"),
+      customerId,
+      from: from && isIsoDate(from) ? from : undefined,
+      to: to && isIsoDate(to) ? to : undefined,
+      method,
+      kind,
+      sort: sortParam(sp, OPERATION_SORTS),
+      page,
+      pageSize: PAGE_SIZE,
+    }),
+    listCustomerFilterOptions([store.id], "deliveries"),
+  ]);
   const pathname = storeHref(store.id, "operations");
 
   return (
@@ -67,6 +76,20 @@ export default async function OperationsPage({ params, searchParams }: PageProps
         <SearchInput className="sm:w-72" placeholder="კლიენტი, კომენტარი ან №…" />
         <DateRangeFilter />
         <div className="flex flex-wrap gap-2 sm:ml-auto">
+          <ParamCombobox
+            param="customer"
+            value={customerId ? String(customerId) : undefined}
+            label="კლიენტი"
+            placeholder="კლიენტის ძებნა…"
+            emptyText="კლიენტი ვერ მოიძებნა."
+            className="w-64"
+            options={customerOptions.map((c) => ({
+              value: String(c.id),
+              label: c.name,
+              hint: [c.address, c.isArchived ? "სანაგვე" : ""].filter(Boolean).join(" · ") || undefined,
+              muted: c.isArchived,
+            }))}
+          />
           <ParamSelect
             param="kind"
             value={kind ?? "all"}
@@ -101,12 +124,22 @@ export default async function OperationsPage({ params, searchParams }: PageProps
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
-                <TableHead>თარიღი</TableHead>
-                <TableHead>დასახელება</TableHead>
-                <TableHead className="text-right">აღებული თანხა</TableHead>
-                <TableHead className="hidden text-right lg:table-cell">მეთოდი</TableHead>
-                <TableHead className="text-right">დარჩენილი</TableHead>
-                <TableHead className="text-right">სულ ჯამში</TableHead>
+                <SortableHead column="date" first="desc">
+                  თარიღი
+                </SortableHead>
+                <SortableHead column="customer">დასახელება</SortableHead>
+                <SortableHead column="paid" className="text-right">
+                  აღებული თანხა
+                </SortableHead>
+                <SortableHead column="method" first="asc" className="hidden text-right lg:table-cell">
+                  მეთოდი
+                </SortableHead>
+                <SortableHead column="debt" className="text-right">
+                  დარჩენილი
+                </SortableHead>
+                <SortableHead column="total" className="text-right">
+                  სულ ჯამში
+                </SortableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -120,16 +153,18 @@ export default async function OperationsPage({ params, searchParams }: PageProps
                       </Link>
                       <div className="text-xs text-muted-foreground tabular-nums">#{op.number}</div>
                     </TableCell>
-                    <TableCell className="max-w-[22rem]">
-                      <Link href={storeHref(store.id, `customers/${op.customerId}`)} className="hover:underline">
-                        {op.customerName}
-                      </Link>
-                      {k !== "delivery" ? (
-                        <Badge variant={k === "adjustment" ? "outline" : "secondary"} className="ml-2 align-middle">
-                          {OPERATION_KIND_LABEL[k]}
-                        </Badge>
-                      ) : null}
-                      {op.comment ? <div className="truncate text-xs text-muted-foreground">{op.comment}</div> : null}
+                    <TableCell>
+                      <div className="flex max-w-[22rem] items-center gap-2">
+                        <Link href={storeHref(store.id, `customers/${op.customerId}`)} className="truncate hover:underline" title={op.customerName}>
+                          {op.customerName}
+                        </Link>
+                        {k !== "delivery" ? (
+                          <Badge variant={k === "adjustment" ? "outline" : "secondary"} className="shrink-0">
+                            {OPERATION_KIND_LABEL[k]}
+                          </Badge>
+                        ) : null}
+                      </div>
+                      {op.comment ? <div className="max-w-[22rem] truncate text-xs text-muted-foreground">{op.comment}</div> : null}
                     </TableCell>
                     <TableCell className="text-right">
                       <Money value={op.paid} tone="muted-zero" />

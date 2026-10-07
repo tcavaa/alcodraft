@@ -7,6 +7,7 @@ import { FilterTabs } from "@/components/data/filter-tabs";
 import { Pagination } from "@/components/data/pagination";
 import { ParamSelect } from "@/components/data/param-select";
 import { SearchInput } from "@/components/data/search-input";
+import { SortableHead } from "@/components/data/sortable-head";
 import { EmptyState } from "@/components/empty-state";
 import { Money } from "@/components/money";
 import { PageHeader } from "@/components/page-header";
@@ -15,11 +16,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { AddEntryDialog, EntryRowMenu, NewAccountButton } from "@/features/finance/components/finance-components";
-import { listAccounts, listEntries } from "@/features/finance/queries";
+import { ENTRY_SORTS, listAccounts, listEntries } from "@/features/finance/queries";
 import { formatDate, isIsoDate } from "@/lib/dates";
 import { dec } from "@/lib/money";
 import { storeHref } from "@/lib/routes";
-import { intParam, pageParam, param } from "@/lib/search-params";
+import { intParam, pageParam, param, sortParam } from "@/lib/search-params";
 import { requireStore } from "@/server/auth/dal";
 
 export const metadata: Metadata = { title: "სალარო" };
@@ -52,6 +53,7 @@ export default async function FinancePage({ params, searchParams }: PageProps<"/
     from: from && isIsoDate(from) ? from : undefined,
     to: to && isIsoDate(to) ? to : undefined,
     direction: dir === "in" || dir === "out" ? dir : undefined,
+    sort: sortParam(sp, ENTRY_SORTS),
     page,
     pageSize: PAGE_SIZE,
   });
@@ -121,11 +123,19 @@ export default async function FinancePage({ params, searchParams }: PageProps<"/
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
-                <TableHead>თარიღი</TableHead>
-                <TableHead className="text-right">ხარჯი</TableHead>
-                <TableHead className="text-right">შემოსავალი</TableHead>
-                <TableHead className="text-right">ბალანსი</TableHead>
-                <TableHead>კომენტარი</TableHead>
+                <SortableHead column="date" first="desc">
+                  თარიღი
+                </SortableHead>
+                <SortableHead column="out" className="text-right">
+                  ხარჯი
+                </SortableHead>
+                <SortableHead column="in" className="text-right">
+                  შემოსავალი
+                </SortableHead>
+                <SortableHead column="balance" className="text-right">
+                  ბალანსი
+                </SortableHead>
+                <SortableHead column="comment">კომენტარი</SortableHead>
                 <TableHead className="w-10" />
               </TableRow>
             </TableHeader>

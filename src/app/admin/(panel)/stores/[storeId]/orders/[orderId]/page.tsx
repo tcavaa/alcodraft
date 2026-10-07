@@ -3,25 +3,29 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { SortableHead } from "@/components/data/sortable-head";
 import { Money } from "@/components/money";
 import { PageHeader } from "@/components/page-header";
 import { PrintButton } from "@/components/print-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableFooter, TableHeader, TableRow } from "@/components/ui/table";
 import { DocumentEditForm } from "@/features/sales/components/document-edit-form";
 import { OrderActions } from "@/features/sales/components/order-actions";
 import { ORDER_STATUS_LABEL, UPLOAD_STATUS_LABEL } from "@/features/sales/labels";
 import { leftoverValue, paymentLabel } from "@/features/sales/logic";
 import { getOrder, listProductOptions } from "@/features/sales/queries";
 import { formatDate, formatDateTime } from "@/lib/dates";
-import { formatDiscount, formatQty } from "@/lib/money";
+import { dec, formatDiscount, formatQty } from "@/lib/money";
 import { storeHref } from "@/lib/routes";
-import { param } from "@/lib/search-params";
+import { param, sortParam } from "@/lib/search-params";
+import { sortRows } from "@/lib/sort";
 import { requireStore } from "@/server/auth/dal";
 
 export const metadata: Metadata = { title: "შეკვეთა" };
+
+const LINE_SORTS = ["name", "price", "quantity", "leftover", "remaining", "gift", "total"] as const;
 
 export default async function OrderPage({ params, searchParams }: PageProps<"/admin/stores/[storeId]/orders/[orderId]">) {
   const { storeId, orderId } = await params;
@@ -31,6 +35,16 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/ad
   const sp = await searchParams;
   const { order: o, customer, items } = data;
   const isOpen = o.status === "open";
+  // Read-only table of a completed/cancelled order (open orders show the editor instead).
+  const lines = sortRows(items, sortParam(sp, LINE_SORTS), {
+    name: (i) => i.name,
+    price: (i) => dec(i.unitPrice),
+    quantity: (i) => i.quantity,
+    leftover: (i) => i.leftoverQty,
+    remaining: (i) => i.quantity - i.leftoverQty,
+    gift: (i) => i.giftQty,
+    total: (i) => dec(i.lineTotal),
+  });
 
   const header = (
     <PageHeader
@@ -123,17 +137,31 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/ad
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
-                <TableHead>დასახელება</TableHead>
-                <TableHead className="text-right">ფასი</TableHead>
-                <TableHead className="text-right">შეტანილი</TableHead>
-                <TableHead className="text-right">ნაშთი</TableHead>
-                <TableHead className="text-right">დარჩენილი</TableHead>
-                <TableHead className="text-right">საჩუქარი</TableHead>
-                <TableHead className="text-right">ფასი ჯამში</TableHead>
+                <SortableHead column="name">
+                  დასახელება
+                </SortableHead>
+                <SortableHead column="price" className="text-right">
+                  ფასი
+                </SortableHead>
+                <SortableHead column="quantity" className="text-right">
+                  შეტანილი
+                </SortableHead>
+                <SortableHead column="leftover" className="text-right">
+                  ნაშთი
+                </SortableHead>
+                <SortableHead column="remaining" className="text-right">
+                  დარჩენილი
+                </SortableHead>
+                <SortableHead column="gift" className="text-right">
+                  საჩუქარი
+                </SortableHead>
+                <SortableHead column="total" className="text-right">
+                  ფასი ჯამში
+                </SortableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {items.map((i) => (
+              {lines.map((i) => (
                 <TableRow key={i.id}>
                   <TableCell className="font-medium">{i.name}</TableCell>
                   <TableCell className="text-right">

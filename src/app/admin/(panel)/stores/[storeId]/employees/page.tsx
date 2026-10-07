@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { FilterTabs } from "@/components/data/filter-tabs";
+import { SortableHead } from "@/components/data/sortable-head";
 import { EmptyState } from "@/components/empty-state";
 import { Money } from "@/components/money";
 import { PageHeader } from "@/components/page-header";
@@ -11,19 +12,28 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { EmployeeRowMenu } from "@/features/finance/components/finance-components";
 import { countEmployees, listEmployees } from "@/features/finance/queries";
 import { formatDate } from "@/lib/dates";
-import { sum } from "@/lib/money";
+import { dec, sum } from "@/lib/money";
 import { storeHref } from "@/lib/routes";
-import { param } from "@/lib/search-params";
+import { param, sortParam } from "@/lib/search-params";
+import { sortRows } from "@/lib/sort";
 import { requireStore } from "@/server/auth/dal";
 
 export const metadata: Metadata = { title: "ხელფასები" };
+
+const SORTS = ["name", "balance", "paid", "last"] as const;
 
 export default async function EmployeesPage({ params, searchParams }: PageProps<"/admin/stores/[storeId]/employees">) {
   const { storeId } = await params;
   const { store } = await requireStore(storeId);
   const sp = await searchParams;
   const archived = param(sp, "archived") === "1";
-  const [rows, counts] = await Promise.all([listEmployees(store.id, archived), countEmployees(store.id)]);
+  const [list, counts] = await Promise.all([listEmployees(store.id, archived), countEmployees(store.id)]);
+  const rows = sortRows(list, sortParam(sp, SORTS), {
+    name: (e) => e.name,
+    balance: (e) => dec(e.wageBalance),
+    paid: (e) => dec(e.paid),
+    last: (e) => e.lastPaid,
+  });
 
   return (
     <>
@@ -59,10 +69,16 @@ export default async function EmployeesPage({ params, searchParams }: PageProps<
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
-                <TableHead>სახელი</TableHead>
-                <TableHead className="text-right">გასაცემი ხელფასი</TableHead>
-                <TableHead className="text-right">სულ გაცემული</TableHead>
-                <TableHead className="hidden text-right md:table-cell">ბოლო გაცემა</TableHead>
+                <SortableHead column="name">სახელი</SortableHead>
+                <SortableHead column="balance" className="text-right">
+                  გასაცემი ხელფასი
+                </SortableHead>
+                <SortableHead column="paid" className="text-right">
+                  სულ გაცემული
+                </SortableHead>
+                <SortableHead column="last" className="hidden text-right md:table-cell">
+                  ბოლო გაცემა
+                </SortableHead>
                 <TableHead className="w-10" />
               </TableRow>
             </TableHeader>

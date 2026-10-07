@@ -3,20 +3,24 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { SortableHead } from "@/components/data/sortable-head";
 import { Money } from "@/components/money";
 import { PageHeader } from "@/components/page-header";
 import { PrintButton } from "@/components/print-button";
-import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableFooter, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { DeleteReceiptButton } from "@/features/stock/components/supplier-components";
 import { getReceipt } from "@/features/stock/queries";
 import { formatDate, formatDateTime } from "@/lib/dates";
 import { dec, formatAmount, formatQty, sum } from "@/lib/money";
 import { storeHref } from "@/lib/routes";
-import { param } from "@/lib/search-params";
+import { param, sortParam } from "@/lib/search-params";
+import { sortRows } from "@/lib/sort";
 import { requireStore } from "@/server/auth/dal";
 
 export const metadata: Metadata = { title: "მიღება" };
+
+const SORTS = ["name", "before", "cost", "added", "after", "value"] as const;
 
 /** Old drinks/history/{id}: stock before, price paid (red if it differs from today's), added, after. */
 export default async function ReceiptPage({ params, searchParams }: PageProps<"/admin/stores/[storeId]/stock/[receiptId]">) {
@@ -25,7 +29,15 @@ export default async function ReceiptPage({ params, searchParams }: PageProps<"/
   const data = await getReceipt(store.id, Number(receiptId));
   if (!data) notFound();
   const sp = await searchParams;
-  const { receipt: r, items } = data;
+  const { receipt: r } = data;
+  const items = sortRows(data.items, sortParam(sp, SORTS), {
+    name: (i) => i.name,
+    before: (i) => i.stockBefore,
+    cost: (i) => dec(i.unitCost),
+    added: (i) => i.quantity,
+    after: (i) => (i.stockBefore === null ? null : i.stockBefore + i.quantity),
+    value: (i) => dec(i.unitCost).times(i.quantity),
+  });
   const total = sum(items.map((i) => dec(i.unitCost).times(i.quantity)));
 
   return (
@@ -65,12 +77,22 @@ export default async function ReceiptPage({ params, searchParams }: PageProps<"/
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
-              <TableHead>დასახელება</TableHead>
-              <TableHead className="text-right">რაოდენობა</TableHead>
-              <TableHead className="text-right">შემოტანის ფასი</TableHead>
-              <TableHead className="text-right">დამატებული</TableHead>
-              <TableHead className="text-right">დღის ბოლოს</TableHead>
-              <TableHead className="text-right">ღირებულება</TableHead>
+              <SortableHead column="name">დასახელება</SortableHead>
+              <SortableHead column="before" className="text-right">
+                რაოდენობა
+              </SortableHead>
+              <SortableHead column="cost" className="text-right">
+                შემოტანის ფასი
+              </SortableHead>
+              <SortableHead column="added" className="text-right">
+                დამატებული
+              </SortableHead>
+              <SortableHead column="after" className="text-right">
+                დღის ბოლოს
+              </SortableHead>
+              <SortableHead column="value" className="text-right">
+                ღირებულება
+              </SortableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

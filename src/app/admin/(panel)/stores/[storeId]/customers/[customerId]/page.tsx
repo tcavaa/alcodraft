@@ -5,24 +5,31 @@ import { notFound } from "next/navigation";
 
 import { FilterTabs } from "@/components/data/filter-tabs";
 import { Pagination } from "@/components/data/pagination";
+import { SortableHead } from "@/components/data/sortable-head";
 import { Money } from "@/components/money";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableFooter, TableHeader, TableRow } from "@/components/ui/table";
 import { CustomerColorPicker } from "@/features/customers/components/customer-color";
 import { CustomerComment } from "@/features/customers/components/customer-comment";
 import { CustomerRowMenu } from "@/features/customers/components/customer-row-menu";
 import { DebtAdjustmentDialog } from "@/features/customers/components/debt-adjustment-dialog";
-import { getCustomer, getCustomerProductSummary, listCustomerDeliveries } from "@/features/customers/queries";
+import {
+  CUSTOMER_OPERATION_SORTS,
+  getCustomer,
+  getCustomerProductSummary,
+  listCustomerDeliveries,
+} from "@/features/customers/queries";
 import { OPERATION_KIND_LABEL, operationKind } from "@/features/sales/labels";
 import { paymentLabel } from "@/features/sales/logic";
 import { formatDate } from "@/lib/dates";
 import { dec, formatQty, sum } from "@/lib/money";
 import { storeHref } from "@/lib/routes";
-import { pageParam, param } from "@/lib/search-params";
+import { pageParam, param, sortParam } from "@/lib/search-params";
+import { sortRows } from "@/lib/sort";
 import { requireStore } from "@/server/auth/dal";
 
 export const metadata: Metadata = { title: "კლიენტი" };
@@ -170,7 +177,7 @@ export default async function CustomerPage({
       {tab === "operations" ? (
         <OperationsTable storeId={store.id} customerId={customer.id} page={page} pathname={pathname} sp={sp} stats={stats} />
       ) : (
-        <ProductSummary customerId={customer.id} />
+        <ProductSummary customerId={customer.id} sp={sp} />
       )}
     </>
   );
@@ -191,7 +198,7 @@ async function OperationsTable({
   sp: Record<string, string | string[] | undefined>;
   stats: { debt: string; total: string; paid: string };
 }) {
-  const { rows, total } = await listCustomerDeliveries(customerId, page, PAGE_SIZE);
+  const { rows, total } = await listCustomerDeliveries(customerId, page, PAGE_SIZE, sortParam(sp, CUSTOMER_OPERATION_SORTS));
   if (rows.length === 0) {
     return <p className="rounded-xl border border-dashed bg-card/50 p-10 text-center text-sm text-muted-foreground">ოპერაციები ჯერ არ არის.</p>;
   }
@@ -201,14 +208,30 @@ async function OperationsTable({
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
-              <TableHead>თარიღი</TableHead>
-              <TableHead>№</TableHead>
-              <TableHead className="hidden md:table-cell">ტიპი</TableHead>
-              <TableHead className="text-right">სულ ჯამში</TableHead>
-              <TableHead className="text-right">აღებული თანხა</TableHead>
-              <TableHead className="hidden text-right sm:table-cell">მეთოდი</TableHead>
-              <TableHead className="text-right">დარჩენილი</TableHead>
-              <TableHead className="hidden xl:table-cell">კომენტარი</TableHead>
+              <SortableHead column="date" first="desc">
+                თარიღი
+              </SortableHead>
+              <SortableHead column="number" first="desc">
+                №
+              </SortableHead>
+              <SortableHead column="kind" className="hidden md:table-cell">
+                ტიპი
+              </SortableHead>
+              <SortableHead column="total" className="text-right">
+                სულ ჯამში
+              </SortableHead>
+              <SortableHead column="paid" className="text-right">
+                აღებული თანხა
+              </SortableHead>
+              <SortableHead column="method" first="asc" className="hidden text-right sm:table-cell">
+                მეთოდი
+              </SortableHead>
+              <SortableHead column="debt" className="text-right">
+                დარჩენილი
+              </SortableHead>
+              <SortableHead column="comment" className="hidden xl:table-cell">
+                კომენტარი
+              </SortableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -283,8 +306,19 @@ async function OperationsTable({
   );
 }
 
-async function ProductSummary({ customerId }: { customerId: number }) {
-  const rows = await getCustomerProductSummary(customerId);
+const SUMMARY_SORTS = ["name", "price", "quantity", "leftover", "remaining", "gift", "total"] as const;
+
+async function ProductSummary({ customerId, sp }: { customerId: number; sp: Record<string, string | string[] | undefined> }) {
+  const all = await getCustomerProductSummary(customerId);
+  const rows = sortRows(all, sortParam(sp, SUMMARY_SORTS, "ssort"), {
+    name: (r) => r.name,
+    price: (r) => dec(r.total).div(r.quantity),
+    quantity: (r) => r.quantity,
+    leftover: (r) => r.leftover,
+    remaining: (r) => r.quantity - r.leftover,
+    gift: (r) => r.gift,
+    total: (r) => dec(r.total),
+  });
   if (rows.length === 0) {
     return <p className="rounded-xl border border-dashed bg-card/50 p-10 text-center text-sm text-muted-foreground">მიწოდებული პროდუქცია არ არის.</p>;
   }
@@ -299,13 +333,27 @@ async function ProductSummary({ customerId }: { customerId: number }) {
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/40 hover:bg-muted/40">
-            <TableHead>დასახელება</TableHead>
-            <TableHead className="text-right">საშუალო ფასი</TableHead>
-            <TableHead className="text-right">შეტანილი</TableHead>
-            <TableHead className="text-right">ნაშთი</TableHead>
-            <TableHead className="text-right">დარჩენილი</TableHead>
-            <TableHead className="text-right">საჩუქარი</TableHead>
-            <TableHead className="text-right">ფასი ჯამში</TableHead>
+            <SortableHead param="ssort" column="name">
+              დასახელება
+            </SortableHead>
+            <SortableHead param="ssort" column="price" className="text-right">
+              საშუალო ფასი
+            </SortableHead>
+            <SortableHead param="ssort" column="quantity" className="text-right">
+              შეტანილი
+            </SortableHead>
+            <SortableHead param="ssort" column="leftover" className="text-right">
+              ნაშთი
+            </SortableHead>
+            <SortableHead param="ssort" column="remaining" className="text-right">
+              დარჩენილი
+            </SortableHead>
+            <SortableHead param="ssort" column="gift" className="text-right">
+              საჩუქარი
+            </SortableHead>
+            <SortableHead param="ssort" column="total" className="text-right">
+              ფასი ჯამში
+            </SortableHead>
           </TableRow>
         </TableHeader>
         <TableBody>

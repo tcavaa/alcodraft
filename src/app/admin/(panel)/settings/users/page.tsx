@@ -2,20 +2,31 @@ import { Plus, ShieldCheck } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { SortableHead } from "@/components/data/sortable-head";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { listUsersAdmin } from "@/features/admin/queries";
 import { formatDateTime } from "@/lib/dates";
+import { sortParam } from "@/lib/search-params";
+import { sortRows } from "@/lib/sort";
 import { cn } from "@/lib/utils";
 import { requireSuperAdmin } from "@/server/auth/dal";
 
 export const metadata: Metadata = { title: "მომხმარებლები" };
 
-export default async function UsersPage() {
+const SORTS = ["user", "role", "stores", "login"] as const;
+
+export default async function UsersPage({ searchParams }: PageProps<"/admin/settings/users">) {
   await requireSuperAdmin();
-  const users = await listUsersAdmin();
+  const users = sortRows(await listUsersAdmin(), sortParam(await searchParams, SORTS), {
+    user: (u) => u.name || u.email,
+    role: (u) => (u.role === "super_admin" ? 0 : 1),
+    // super admins open every store
+    stores: (u) => (u.role === "super_admin" ? Number.MAX_SAFE_INTEGER : u.storeNames.length),
+    login: (u) => u.lastLoginAt?.getTime(),
+  });
   return (
     <>
       <PageHeader
@@ -35,10 +46,14 @@ export default async function UsersPage() {
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40">
-              <TableHead>მომხმარებელი</TableHead>
-              <TableHead>როლი</TableHead>
-              <TableHead className="hidden md:table-cell">მაღაზიები</TableHead>
-              <TableHead className="hidden text-right lg:table-cell">ბოლო შესვლა</TableHead>
+              <SortableHead column="user">მომხმარებელი</SortableHead>
+              <SortableHead column="role">როლი</SortableHead>
+              <SortableHead column="stores" first="desc" className="hidden md:table-cell">
+                მაღაზიები
+              </SortableHead>
+              <SortableHead column="login" className="hidden text-right lg:table-cell">
+                ბოლო შესვლა
+              </SortableHead>
             </TableRow>
           </TableHeader>
           <TableBody>

@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { FilterTabs } from "@/components/data/filter-tabs";
+import { SortableHead } from "@/components/data/sortable-head";
 import { EmptyState } from "@/components/empty-state";
 import { Money } from "@/components/money";
 import { PageHeader } from "@/components/page-header";
@@ -14,17 +15,27 @@ import { countSuppliers, listSuppliers } from "@/features/stock/queries";
 import { formatDate } from "@/lib/dates";
 import { dec, sum } from "@/lib/money";
 import { storeHref } from "@/lib/routes";
-import { param } from "@/lib/search-params";
+import { param, sortParam } from "@/lib/search-params";
+import { sortRows } from "@/lib/sort";
 import { requireStore } from "@/server/auth/dal";
 
 export const metadata: Metadata = { title: "მომწოდებლები" };
+
+const SORTS = ["name", "last", "payable", "paid", "remaining"] as const;
 
 export default async function SuppliersPage({ params, searchParams }: PageProps<"/admin/stores/[storeId]/suppliers">) {
   const { storeId } = await params;
   const { store, user } = await requireStore(storeId);
   const sp = await searchParams;
   const archived = param(sp, "archived") === "1";
-  const [rows, counts] = await Promise.all([listSuppliers(store.id, archived), countSuppliers(store.id)]);
+  const [list, counts] = await Promise.all([listSuppliers(store.id, archived), countSuppliers(store.id)]);
+  const rows = sortRows(list, sortParam(sp, SORTS), {
+    name: (s) => s.name,
+    last: (s) => s.lastDate,
+    payable: (s) => dec(s.payable),
+    paid: (s) => dec(s.paid),
+    remaining: (s) => dec(s.payable).minus(s.paid),
+  });
   const pathname = storeHref(store.id, "suppliers");
   const remaining = sum(rows.map((r) => dec(r.payable).minus(r.paid)));
 
@@ -62,11 +73,19 @@ export default async function SuppliersPage({ params, searchParams }: PageProps<
           <Table>
             <TableHeader>
               <TableRow className="bg-muted/40 hover:bg-muted/40">
-                <TableHead>დასახელება</TableHead>
-                <TableHead className="hidden text-right md:table-cell">ბოლო მიღება</TableHead>
-                <TableHead className="text-right">სულ გადასახდელი</TableHead>
-                <TableHead className="text-right">გადახდილი</TableHead>
-                <TableHead className="text-right">დარჩა</TableHead>
+                <SortableHead column="name">დასახელება</SortableHead>
+                <SortableHead column="last" className="hidden text-right md:table-cell">
+                  ბოლო მიღება
+                </SortableHead>
+                <SortableHead column="payable" className="text-right">
+                  სულ გადასახდელი
+                </SortableHead>
+                <SortableHead column="paid" className="text-right">
+                  გადახდილი
+                </SortableHead>
+                <SortableHead column="remaining" className="text-right">
+                  დარჩა
+                </SortableHead>
                 <TableHead className="w-10" />
               </TableRow>
             </TableHeader>

@@ -8,23 +8,39 @@ import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { SortableHead } from "@/components/data/sortable-head";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { EmployeeRowMenu, WageForm } from "@/features/finance/components/finance-components";
 import { getEmployee } from "@/features/finance/queries";
 import { formatDate } from "@/lib/dates";
 import { dec, sum } from "@/lib/money";
 import { storeHref } from "@/lib/routes";
+import { sortParam } from "@/lib/search-params";
+import { sortRows } from "@/lib/sort";
 import { requireStore } from "@/server/auth/dal";
 
 export const metadata: Metadata = { title: "თანამშრომელი" };
 
 /** Old employees/historywages. */
-export default async function EmployeePage({ params }: PageProps<"/admin/stores/[storeId]/employees/[employeeId]">) {
+const SORTS = ["date", "amount", "comment"] as const;
+
+export default async function EmployeePage({ params, searchParams }: PageProps<"/admin/stores/[storeId]/employees/[employeeId]">) {
   const { storeId, employeeId } = await params;
   const { store } = await requireStore(storeId);
   const data = await getEmployee(store.id, Number(employeeId));
   if (!data) notFound();
-  const { employee: e, accruals, payments } = data;
+  const { employee: e } = data;
+  const sp = await searchParams;
+  const payments = sortRows(data.payments, sortParam(sp, SORTS, "psort"), {
+    date: (p) => p.date,
+    amount: (p) => dec(p.amountOut).minus(p.amountIn),
+    comment: (p) => p.note,
+  });
+  const accruals = sortRows(data.accruals, sortParam(sp, SORTS, "asort"), {
+    date: (a) => a.date,
+    amount: (a) => dec(a.amount),
+    comment: (a) => a.comment,
+  });
   const paid = sum(payments.map((p) => dec(p.amountOut).minus(p.amountIn)));
   const accrued = sum(accruals.map((a) => a.amount));
 
@@ -84,9 +100,15 @@ export default async function EmployeePage({ params }: PageProps<"/admin/stores/
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="pl-6">თარიღი</TableHead>
-                    <TableHead className="text-right">თანხა</TableHead>
-                    <TableHead className="pr-6">კომენტარი</TableHead>
+                    <SortableHead param="psort" column="date" first="desc" className="pl-6">
+                      თარიღი
+                    </SortableHead>
+                    <SortableHead param="psort" column="amount" className="text-right">
+                      თანხა
+                    </SortableHead>
+                    <SortableHead param="psort" column="comment" className="pr-6">
+                      კომენტარი
+                    </SortableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -118,9 +140,15 @@ export default async function EmployeePage({ params }: PageProps<"/admin/stores/
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead className="pl-6">თარიღი</TableHead>
-                    <TableHead className="text-right">ხელფასი</TableHead>
-                    <TableHead className="pr-6">კომენტარი</TableHead>
+                    <SortableHead param="asort" column="date" first="desc" className="pl-6">
+                      თარიღი
+                    </SortableHead>
+                    <SortableHead param="asort" column="amount" className="text-right">
+                      ხელფასი
+                    </SortableHead>
+                    <SortableHead param="asort" column="comment" className="pr-6">
+                      კომენტარი
+                    </SortableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

@@ -1,8 +1,9 @@
 import Link from "next/link";
 
+import { SortableHead } from "@/components/data/sortable-head";
 import { Money } from "@/components/money";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableFooter, TableHeader, TableRow } from "@/components/ui/table";
 import { formatDate } from "@/lib/dates";
 import { storeHref } from "@/lib/routes";
 import { cn } from "@/lib/utils";
@@ -44,15 +45,31 @@ export function OrdersTable({
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/40 hover:bg-muted/40">
-            <TableHead>თარიღი</TableHead>
-            <TableHead>დასახელება</TableHead>
-            {showStore ? <TableHead className="hidden lg:table-cell">მაღაზია</TableHead> : null}
-            <TableHead className="text-right">აღებული თანხა</TableHead>
-            <TableHead className="hidden text-right md:table-cell">დარჩენილი</TableHead>
-            <TableHead className="text-right">სულ ჯამში</TableHead>
-            <TableHead className="hidden xl:table-cell">კომენტარი</TableHead>
-            <TableHead>სტატუსი</TableHead>
-            <TableHead className="hidden text-center sm:table-cell">RS</TableHead>
+            <SortableHead column="date" first="desc">
+              თარიღი
+            </SortableHead>
+            <SortableHead column="customer">დასახელება</SortableHead>
+            {showStore ? (
+              <SortableHead column="store" className="hidden lg:table-cell">
+                მაღაზია
+              </SortableHead>
+            ) : null}
+            <SortableHead column="paid" className="text-right">
+              აღებული თანხა
+            </SortableHead>
+            <SortableHead column="debt" className="hidden text-right md:table-cell">
+              დარჩენილი
+            </SortableHead>
+            <SortableHead column="total" className="text-right">
+              სულ ჯამში
+            </SortableHead>
+            <SortableHead column="comment" className="hidden xl:table-cell">
+              კომენტარი
+            </SortableHead>
+            <SortableHead column="status">სტატუსი</SortableHead>
+            <SortableHead column="waybill" first="desc" className="hidden text-center sm:table-cell">
+              RS
+            </SortableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -66,21 +83,23 @@ export function OrdersTable({
                   </Link>
                   <div className="text-xs text-muted-foreground tabular-nums">#{o.number}</div>
                 </TableCell>
-                <TableCell className="max-w-[18rem]">
-                  <Link href={storeHref(o.storeId, `customers/${o.customerId}`)} className="hover:underline">
-                    {o.customerName}
-                  </Link>
-                  {o.customerAddress ? <div className="truncate text-xs text-muted-foreground">{o.customerAddress}</div> : null}
-                  {o.status !== "open" ? (
-                    <div className="mt-1 flex items-center gap-2">
-                      <Badge variant={o.status === "cancelled" ? "destructive" : "secondary"}>{ORDER_STATUS_LABEL[o.status]}</Badge>
-                      {o.deliveryId ? (
-                        <Link href={storeHref(o.storeId, `operations/${o.deliveryId}`)} className="text-xs text-muted-foreground hover:underline">
-                          ოპერაცია →
-                        </Link>
-                      ) : null}
-                    </div>
-                  ) : null}
+                <TableCell>
+                  <div className="max-w-[18rem]">
+                    <Link href={storeHref(o.storeId, `customers/${o.customerId}`)} className="block truncate hover:underline" title={o.customerName}>
+                      {o.customerName}
+                    </Link>
+                    {o.customerAddress ? <div className="truncate text-xs text-muted-foreground">{o.customerAddress}</div> : null}
+                    {o.status !== "open" ? (
+                      <div className="mt-1 flex items-center gap-2">
+                        <Badge variant={o.status === "cancelled" ? "destructive" : "secondary"}>{ORDER_STATUS_LABEL[o.status]}</Badge>
+                        {o.deliveryId ? (
+                          <Link href={storeHref(o.storeId, `operations/${o.deliveryId}`)} className="text-xs text-muted-foreground hover:underline">
+                            ოპერაცია →
+                          </Link>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
                 </TableCell>
                 {showStore ? <TableCell className="hidden text-muted-foreground lg:table-cell">{o.storeName}</TableCell> : null}
                 <TableCell className="text-right">

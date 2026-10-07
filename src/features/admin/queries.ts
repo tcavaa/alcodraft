@@ -2,7 +2,9 @@ import "server-only";
 
 import { and, asc, count, desc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
 
+import type { SortState } from "@/lib/sort";
 import { db } from "@/server/db";
+import { by } from "@/server/db/order";
 import { auditLog, customers, deliveries, products, stores, userStores, users } from "@/server/db/schema";
 
 export async function listStoresAdmin() {
@@ -83,7 +85,17 @@ export async function listStoreOptions() {
     .orderBy(asc(stores.isArchived), asc(stores.sortOrder), asc(stores.id));
 }
 
-export async function listAudit(p: { storeId?: number; userId?: number; q?: string; page: number; pageSize: number }) {
+export const AUDIT_SORTS = ["time", "user", "store", "action"] as const;
+export type AuditSort = (typeof AUDIT_SORTS)[number];
+
+export async function listAudit(p: {
+  storeId?: number;
+  userId?: number;
+  q?: string;
+  sort: SortState<AuditSort> | null;
+  page: number;
+  pageSize: number;
+}) {
   const conditions: (SQL | undefined)[] = [];
   if (p.storeId) conditions.push(eq(auditLog.storeId, p.storeId));
   if (p.userId) conditions.push(eq(auditLog.userId, p.userId));
@@ -92,6 +104,22 @@ export async function listAudit(p: { storeId?: number; userId?: number; q?: stri
     conditions.push(or(ilike(auditLog.summary, like), ilike(auditLog.action, like)));
   }
   const where = conditions.length ? and(...conditions) : undefined;
+  const s = p.sort;
+  const order = !s
+    ? [desc(auditLog.id)]
+    : s.column === "time"
+      ? [by(auditLog.createdAt, s.dir), by(auditLog.id, s.dir)]
+      : [
+          by(
+            {
+              user: sql`coalesce(nullif(${users.name}, ''), ${users.email})`,
+              store: stores.name,
+              action: auditLog.summary,
+            }[s.column],
+            s.dir,
+          ),
+          desc(auditLog.id),
+        ];
   const [rows, [{ total }]] = await Promise.all([
     db
       .select({
@@ -110,7 +138,7 @@ export async function listAudit(p: { storeId?: number; userId?: number; q?: stri
       .leftJoin(stores, eq(stores.id, auditLog.storeId))
       .leftJoin(users, eq(users.id, auditLog.userId))
       .where(where)
-      .orderBy(desc(auditLog.id))
+      .orderBy(...order)
       .limit(p.pageSize)
       .offset((p.page - 1) * p.pageSize),
     db.select({ total: count() }).from(auditLog).where(where),

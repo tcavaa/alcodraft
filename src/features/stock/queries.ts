@@ -2,7 +2,9 @@ import "server-only";
 
 import { and, asc, count, desc, eq, gte, ilike, lte, or, sql, type SQL } from "drizzle-orm";
 
+import type { SortState } from "@/lib/sort";
 import { db } from "@/server/db";
+import { by } from "@/server/db/order";
 import { financeEntries, products, stockReceiptItems, stockReceipts, suppliers, users } from "@/server/db/schema";
 
 const likeEscape = (q: string) => `%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
@@ -20,9 +22,20 @@ const receiptTotalsQuery = () =>
   .as("receipt_totals");
 
 /** Old drinks/historylist — every stock receipt, newest first. */
+export const RECEIPT_SORTS = ["date", "supplier", "comment", "lines", "quantity", "cost"] as const;
+export type ReceiptSort = (typeof RECEIPT_SORTS)[number];
+
 export async function listReceipts(
   storeId: number,
-  p: { supplierId?: number; from?: string; to?: string; q?: string; page: number; pageSize: number },
+  p: {
+    supplierId?: number;
+    from?: string;
+    to?: string;
+    q?: string;
+    sort: SortState<ReceiptSort> | null;
+    page: number;
+    pageSize: number;
+  },
 ) {
   const receiptTotals = receiptTotalsQuery();
   const conditions: (SQL | undefined)[] = [eq(stockReceipts.storeId, storeId)];
@@ -34,6 +47,24 @@ export async function listReceipts(
     conditions.push(or(ilike(stockReceipts.comment, like), ilike(suppliers.name, like), sql`${stockReceipts.number}::text = ${p.q}`));
   }
   const where = and(...conditions);
+  const s = p.sort;
+  const order = !s
+    ? [desc(stockReceipts.number)]
+    : s.column === "date"
+      ? [by(stockReceipts.receiptDate, s.dir), by(stockReceipts.number, s.dir)]
+      : [
+          by(
+            {
+              supplier: suppliers.name,
+              comment: sql`nullif(${stockReceipts.comment}, '')`,
+              lines: receiptTotals.lines,
+              quantity: receiptTotals.quantity,
+              cost: sql`coalesce(${receiptTotals.cost}, 0)`,
+            }[s.column],
+            s.dir,
+          ),
+          desc(stockReceipts.number),
+        ];
   const [rows, [{ total }]] = await Promise.all([
     db
       .select({
@@ -51,7 +82,7 @@ export async function listReceipts(
       .leftJoin(suppliers, eq(suppliers.id, stockReceipts.supplierId))
       .leftJoin(receiptTotals, eq(receiptTotals.receiptId, stockReceipts.id))
       .where(where)
-      .orderBy(desc(stockReceipts.number))
+      .orderBy(...order)
       .limit(p.pageSize)
       .offset((p.page - 1) * p.pageSize),
     db

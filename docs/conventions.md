@@ -20,6 +20,11 @@
 4. Read path: `features/x/queries.ts`; one query per list + one count query; paginate lists that grow.
 5. Page in `src/app/admin/(panel)/stores/[storeId]/...`: `requireStore(params.storeId)` first; reuse
    `PageHeader`, `FilterTabs`, `SearchInput`, `Pagination`, `Money`, `EmptyState`.
+   Tables: headers are `SortableHead` (`src/components/data/sortable-head.tsx`). Paginated lists sort in
+   SQL — export `X_SORTS` from the query, take `sort: SortState | null`, map columns to expressions with
+   `by(expr, dir)` (`src/server/db/order.ts`, NULLS LAST) and always end with the id so pages are stable.
+   Small, fully loaded tables sort in memory with `sortRows()` (`src/lib/sort.ts` — amounts via `dec()`,
+   same text order as the database). Read the param with `sortParam(sp, SORTS)`.
 6. `npm run typecheck && npm run lint && npm test && npm run build`.
 
 ## Money and numbers

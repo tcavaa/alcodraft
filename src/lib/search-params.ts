@@ -1,3 +1,5 @@
+import { parseSort, type SortState } from "./sort";
+
 export type SearchParams = Record<string, string | string[] | undefined>;
 
 export function param(sp: SearchParams, key: string): string | undefined {
@@ -34,4 +36,9 @@ export function hrefWith(
   }
   const qs = params.toString();
   return qs ? `${pathname}?${qs}` : pathname;
+}
+
+/** The table's sort from the URL (`?sort=col` / `?sort=-col`), or null for the default order. */
+export function sortParam<C extends string>(sp: SearchParams, columns: readonly C[], key = "sort"): SortState<C> | null {
+  return parseSort(param(sp, key), columns);
 }

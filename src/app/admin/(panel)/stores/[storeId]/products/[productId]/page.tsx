@@ -3,20 +3,22 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { SortableHead } from "@/components/data/sortable-head";
 import { Money } from "@/components/money";
 import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { updateProductAction } from "@/features/products/actions";
 import { ProductForm } from "@/features/products/components/product-form";
 import { ProductRowMenu } from "@/features/products/components/product-row-menu";
 import { StockAdjustDialog } from "@/features/products/components/stock-adjust-dialog";
 import { getProduct, listSupplierOptions } from "@/features/products/queries";
 import { formatDate } from "@/lib/dates";
-import { formatQty } from "@/lib/money";
+import { dec, formatQty } from "@/lib/money";
 import { storeHref } from "@/lib/routes";
-import { param } from "@/lib/search-params";
+import { param, sortParam } from "@/lib/search-params";
+import { sortRows } from "@/lib/sort";
 import { cn } from "@/lib/utils";
 import { requireStore } from "@/server/auth/dal";
 
@@ -28,7 +30,13 @@ export default async function ProductPage({ params, searchParams }: PageProps<"/
   const [data, suppliers] = await Promise.all([getProduct(store.id, Number(productId)), listSupplierOptions(store.id)]);
   if (!data) notFound();
   const sp = await searchParams;
-  const { product: p, priceChanges, movements } = data;
+  const { product: p, movements } = data;
+  // Price history: the price after each change (old → new; a change of only the other price keeps it).
+  const priceChanges = sortRows(data.priceChanges, sortParam(sp, ["date", "price", "purchase"] as const, "hsort"), {
+    date: (c) => c.changedOn,
+    price: (c) => dec(c.newSalePrice ?? c.oldSalePrice),
+    purchase: (c) => dec(c.newPurchasePrice ?? c.oldPurchasePrice),
+  });
 
   return (
     <>
@@ -96,9 +104,15 @@ export default async function ProductPage({ params, searchParams }: PageProps<"/
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="pl-6">თარიღი</TableHead>
-                      <TableHead className="text-right">ფასი</TableHead>
-                      <TableHead className="pr-6 text-right">შემოტანის ფასი</TableHead>
+                      <SortableHead param="hsort" column="date" first="desc" className="pl-6">
+                        თარიღი
+                      </SortableHead>
+                      <SortableHead param="hsort" column="price" className="text-right">
+                        ფასი
+                      </SortableHead>
+                      <SortableHead param="hsort" column="purchase" className="pr-6 text-right">
+                        შემოტანის ფასი
+                      </SortableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>

@@ -4,14 +4,15 @@ import Link from "next/link";
 
 import { FilterTabs } from "@/components/data/filter-tabs";
 import { Pagination } from "@/components/data/pagination";
+import { ParamCombobox } from "@/components/data/param-combobox";
 import { SearchInput } from "@/components/data/search-input";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { OrdersTable } from "@/features/sales/components/orders-table";
-import { listOrders } from "@/features/sales/queries";
+import { listCustomerFilterOptions, listOrders, ORDER_SORTS } from "@/features/sales/queries";
 import { storeHref } from "@/lib/routes";
-import { pageParam, param } from "@/lib/search-params";
+import { intParam, pageParam, param, sortParam } from "@/lib/search-params";
 import { requireStore } from "@/server/auth/dal";
 
 export const metadata: Metadata = { title: "შეკვეთები" };
@@ -24,7 +25,18 @@ export default async function OrdersPage({ params, searchParams }: PageProps<"/a
   const sp = await searchParams;
   const view = param(sp, "view") === "history" ? "history" : "open";
   const page = pageParam(sp);
-  const list = await listOrders([store.id], { status: view, q: param(sp, "q"), page, pageSize: PAGE_SIZE });
+  const customerId = intParam(sp, "customer");
+  const [list, customerOptions] = await Promise.all([
+    listOrders([store.id], {
+      status: view,
+      q: param(sp, "q"),
+      customerId,
+      sort: sortParam(sp, ORDER_SORTS),
+      page,
+      pageSize: PAGE_SIZE,
+    }),
+    listCustomerFilterOptions([store.id], "orders"),
+  ]);
   const pathname = storeHref(store.id, "orders");
 
   return (
@@ -42,8 +54,8 @@ export default async function OrdersPage({ params, searchParams }: PageProps<"/a
           </Button>
         }
       />
-      <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center">
-        <SearchInput placeholder="კლიენტი, მისამართი, კომენტარი ან №…" />
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <SearchInput className="sm:w-72" placeholder="კლიენტი, მისამართი, კომენტარი ან №…" />
         <FilterTabs
           pathname={pathname}
           searchParams={sp}
@@ -53,6 +65,20 @@ export default async function OrdersPage({ params, searchParams }: PageProps<"/a
             { value: "open", label: "ღია" },
             { value: "history", label: "ჩახურული შეკვეთები" },
           ]}
+        />
+        <ParamCombobox
+          param="customer"
+          value={customerId ? String(customerId) : undefined}
+          label="კლიენტი"
+          placeholder="კლიენტის ძებნა…"
+          emptyText="კლიენტი ვერ მოიძებნა."
+          className="w-64 sm:ml-auto"
+          options={customerOptions.map((c) => ({
+            value: String(c.id),
+            label: c.name,
+            hint: [c.address, c.isArchived ? "სანაგვე" : ""].filter(Boolean).join(" · ") || undefined,
+            muted: c.isArchived,
+          }))}
         />
       </div>
       {list.rows.length === 0 ? (

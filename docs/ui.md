@@ -22,8 +22,17 @@ Defined in `src/app/globals.css` (`:root` and `.dark`). Light/dark/system via th
 ## Page patterns
 
 - `PageHeader` (eyebrow = store name, title, description, actions on the right; optional back link).
-- Lists: toolbar (`SearchInput`, `FilterTabs` for active/„სანაგვე“, `ParamSelect`, `DateRangeFilter`)
+- Lists: toolbar (`SearchInput`, `FilterTabs` for active/„სანაგვე“, `ParamSelect`, `DateRangeFilter`,
+  `ParamCombobox` for long lists such as the „კლიენტი“ filter on operations and orders)
   → card table with `TableFooter` totals → `Pagination`. Filters live in the URL (shareable, back works).
+- **Every data table sorts by clicking a header** (`SortableHead`): first click → ↑ for text (A→Z) or ↓ for
+  numbers and dates (biggest / newest first), second click → the other direction, third → the table's
+  default order. Only the sorted column shows its gold arrow (no reserved space, so widths don't change).
+  State is `?sort=col` / `?sort=-col`; a page with two tables gives the second its own param
+  (`psort`, `rsort`, `asort`, `hsort`, `ssort`). Input grids (operation/order/receipt forms) are not
+  sortable — rows would jump while typing.
+- Long names in a cell: bound an inner `div` (`max-w-…`) and `truncate` the text with a `title`; a
+  `td` ignores `max-width`, so text would spill into the next column.
 - Row actions: `RowMenu` ("⋯") with confirmations in a dialog; quick inline edits (comment popovers,
   colour dot, RS status pill) update optimistically.
 - Documents (operation, order, receipt): line table + info card on the right; `PrintButton`.

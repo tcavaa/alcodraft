@@ -1,0 +1,244 @@
+import {
+  ArrowRight,
+  Banknote,
+  CalendarDays,
+  ClipboardList,
+  HandCoins,
+  PackageX,
+  Plus,
+  ReceiptText,
+  Wallet,
+} from "lucide-react";
+import type { Metadata } from "next";
+import Link from "next/link";
+
+import { storeHref } from "@/components/layout/nav";
+import { Money } from "@/components/money";
+import { PageHeader } from "@/components/page-header";
+import { StatCard } from "@/components/stat-card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { MonthlyBars } from "@/features/dashboard/monthly-bars";
+import {
+  getMonthlySales,
+  getOutOfStock,
+  getRecentDeliveries,
+  getStoreKpis,
+  getTopDebtors,
+} from "@/features/dashboard/queries";
+import { OPERATION_KIND_LABEL, operationKind } from "@/features/sales/labels";
+import { formatDate, formatMonth, todayIso } from "@/lib/dates";
+import { formatQty } from "@/lib/money";
+import { requireStore } from "@/server/auth/dal";
+
+export const metadata: Metadata = { title: "დაფა" };
+
+export default async function StoreDashboardPage({ params }: PageProps<"/admin/stores/[storeId]">) {
+  const { storeId } = await params;
+  const { store } = await requireStore(storeId);
+  const today = todayIso();
+  const [kpisMap, monthly, recent, debtors, outOfStock] = await Promise.all([
+    getStoreKpis([store.id], today),
+    getMonthlySales(store.id, today),
+    getRecentDeliveries(store.id),
+    getTopDebtors(store.id),
+    getOutOfStock(store.id),
+  ]);
+  const kpis = kpisMap.get(store.id)!;
+  const href = (segment: string) => storeHref(store.id, segment);
+
+  return (
+    <>
+      <PageHeader
+        eyebrow={store.name}
+        title="დაფა"
+        description={`${formatDate(today)} · ${formatMonth(today)}`}
+        actions={
+          <>
+            <Button variant="outline" asChild>
+              <Link href={href("orders/new")}>
+                <ClipboardList />
+                ახალი შეკვეთა
+              </Link>
+            </Button>
+            <Button asChild>
+              <Link href={href("operations/new")}>
+                <Plus />
+                ახალი ოპერაცია
+              </Link>
+            </Button>
+          </>
+        }
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <StatCard
+          accent
+          label="დღევანდელი გაყიდვა"
+          icon={ReceiptText}
+          value={<Money value={kpis.todayTotal} currency />}
+          hint={
+            <>
+              {kpis.todayCount} ოპერაცია · აღებული <Money value={kpis.todayPaid} currency />
+            </>
+          }
+        />
+        <StatCard
+          label="ამ თვის გაყიდვა"
+          icon={CalendarDays}
+          value={<Money value={kpis.monthTotal} currency />}
+          hint={
+            <>
+              აღებული <Money value={kpis.monthPaid} currency />
+            </>
+          }
+        />
+        <StatCard
+          label="მისაღები (კლიენტების ვალი)"
+          icon={HandCoins}
+          value={<Money value={kpis.receivable} currency tone="debt" />}
+          hint={
+            <>
+              ზედმეტად გადახდილი: <Money value={kpis.credit} currency />
+            </>
+          }
+        />
+        <StatCard
+          label="სალაროს ნაშთი"
+          icon={Wallet}
+          value={<Money value={kpis.cashBalance} currency />}
+          hint={
+            <Link href={href("finance")} className="underline-offset-4 hover:underline">
+              სალაროს ნახვა
+            </Link>
+          }
+        />
+      </div>
+
+      <div className="mt-6 grid gap-6 xl:grid-cols-[1.6fr_1fr]">
+        <Card>
+          <CardHeader>
+            <CardTitle>გაყიდვები თვეების მიხედვით</CardTitle>
+            <CardDescription>ბოლო 12 თვე — გაყიდვა და აღებული თანხა</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <MonthlyBars data={monthly} />
+          </CardContent>
+        </Card>
+
+        <div className="grid gap-6">
+          <Card>
+            <CardHeader className="flex-row items-center justify-between">
+              <div>
+                <CardTitle>ყველაზე დიდი ვალი</CardTitle>
+                <CardDescription>აქტიური კლიენტები</CardDescription>
+              </div>
+              <Button variant="ghost" size="sm" asChild>
+                <Link href={`${href("customers")}?sort=debt`}>
+                  ყველა <ArrowRight />
+                </Link>
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-1">
+              {debtors.length === 0 ? (
+                <p className="text-sm text-muted-foreground">ვალიანი კლიენტი არ არის.</p>
+              ) : (
+                debtors.map((c) => (
+                  <Link
+                    key={c.id}
+                    href={href(`customers/${c.id}`)}
+                    className="flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-sm hover:bg-muted"
+                  >
+                    <span className="truncate">{c.name}</span>
+                    <Money value={c.debt} tone="debt" className="font-medium" />
+                  </Link>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <PackageX className="size-4 text-destructive" />
+                მარაგი ამოწურულია
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-1">
+              {outOfStock.length === 0 ? (
+                <p className="text-sm text-muted-foreground">ყველა პროდუქტი მარაგშია.</p>
+              ) : (
+                outOfStock.map((p) => (
+                  <Link
+                    key={p.id}
+                    href={href(`products/${p.id}`)}
+                    className="flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-sm hover:bg-muted"
+                  >
+                    <span className="truncate">{p.name}</span>
+                    <span className="tabular-nums text-destructive">{formatQty(p.stock)}</span>
+                  </Link>
+                ))
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      <Card className="mt-6">
+        <CardHeader className="flex-row items-center justify-between">
+          <div>
+            <CardTitle>ბოლო ოპერაციები</CardTitle>
+            <CardDescription>
+              {kpis.openOrders ? (
+                <Link href={href("orders")} className="hover:underline">
+                  {kpis.openOrders} ღია შეკვეთა ელოდება დასრულებას
+                </Link>
+              ) : (
+                "ღია შეკვეთები არ არის"
+              )}
+            </CardDescription>
+          </div>
+          <Button variant="ghost" size="sm" asChild>
+            <Link href={href("operations")}>
+              ყველა ოპერაცია <ArrowRight />
+            </Link>
+          </Button>
+        </CardHeader>
+        <CardContent className="px-0">
+          <div className="divide-y">
+            {recent.map((op) => {
+              const kind = operationKind({ kind: op.kind, total: op.total, paid: op.paid });
+              return (
+                <Link
+                  key={op.id}
+                  href={href(`operations/${op.id}`)}
+                  className="grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-1 px-6 py-3 text-sm hover:bg-muted/60 md:grid-cols-[110px_1fr_140px_140px]"
+                >
+                  <span className="text-muted-foreground tabular-nums">
+                    #{op.number} · {formatDate(op.date)}
+                  </span>
+                  <span className="truncate font-medium md:order-none">
+                    {op.customerName}
+                    {kind !== "delivery" ? (
+                      <Badge variant="outline" className="ml-2 align-middle text-[0.7rem]">
+                        {OPERATION_KIND_LABEL[kind]}
+                      </Badge>
+                    ) : null}
+                  </span>
+                  <span className="text-right">
+                    <Money value={kind === "adjustment" ? op.adjustment : op.total} currency />
+                  </span>
+                  <span className="hidden text-right text-muted-foreground md:block">
+                    <Banknote className="mr-1 inline size-3.5" />
+                    <Money value={op.paid} currency />
+                  </span>
+                </Link>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+    </>
+  );
+}

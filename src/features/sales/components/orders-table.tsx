@@ -1,0 +1,124 @@
+import Link from "next/link";
+
+import { Money } from "@/components/money";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { formatDate } from "@/lib/dates";
+import { storeHref } from "@/lib/routes";
+import { cn } from "@/lib/utils";
+
+import { ORDER_STATUS_LABEL } from "../labels";
+import { OrderCommentCell, UploadStatusToggle } from "./order-quick-cells";
+
+export interface OrderRow {
+  id: number;
+  storeId: number;
+  storeName: string;
+  number: number;
+  date: string;
+  status: "open" | "completed" | "cancelled";
+  total: string;
+  paid: string;
+  hasWaybill: boolean | null;
+  uploadStatus: "pending" | "uploaded" | null;
+  comment: string;
+  deliveryId: number | null;
+  customerId: number;
+  customerName: string;
+  customerAddress: string;
+  currentDebt: string;
+}
+
+/** Old orders/index, orders/ordershistory and orders/all in one table. */
+export function OrdersTable({
+  rows,
+  totals,
+  showStore,
+}: {
+  rows: OrderRow[];
+  totals: { count: number; total: string; paid: string };
+  showStore: boolean;
+}) {
+  return (
+    <div className="overflow-hidden rounded-xl border bg-card">
+      <Table>
+        <TableHeader>
+          <TableRow className="bg-muted/40 hover:bg-muted/40">
+            <TableHead>თარიღი</TableHead>
+            <TableHead>დასახელება</TableHead>
+            {showStore ? <TableHead className="hidden lg:table-cell">მაღაზია</TableHead> : null}
+            <TableHead className="text-right">აღებული თანხა</TableHead>
+            <TableHead className="hidden text-right md:table-cell">დარჩენილი</TableHead>
+            <TableHead className="text-right">სულ ჯამში</TableHead>
+            <TableHead className="hidden xl:table-cell">კომენტარი</TableHead>
+            <TableHead>სტატუსი</TableHead>
+            <TableHead className="hidden text-center sm:table-cell">RS</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((o) => {
+            const href = storeHref(o.storeId, `orders/${o.id}`);
+            return (
+              <TableRow key={o.id} className={cn(o.status === "cancelled" && "bg-destructive/[0.06] hover:bg-destructive/10")}>
+                <TableCell className="whitespace-nowrap">
+                  <Link href={href} className="font-medium hover:underline">
+                    {formatDate(o.date)}
+                  </Link>
+                  <div className="text-xs text-muted-foreground tabular-nums">#{o.number}</div>
+                </TableCell>
+                <TableCell className="max-w-[18rem]">
+                  <Link href={storeHref(o.storeId, `customers/${o.customerId}`)} className="hover:underline">
+                    {o.customerName}
+                  </Link>
+                  {o.customerAddress ? <div className="truncate text-xs text-muted-foreground">{o.customerAddress}</div> : null}
+                  {o.status !== "open" ? (
+                    <div className="mt-1 flex items-center gap-2">
+                      <Badge variant={o.status === "cancelled" ? "destructive" : "secondary"}>{ORDER_STATUS_LABEL[o.status]}</Badge>
+                      {o.deliveryId ? (
+                        <Link href={storeHref(o.storeId, `operations/${o.deliveryId}`)} className="text-xs text-muted-foreground hover:underline">
+                          ოპერაცია →
+                        </Link>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </TableCell>
+                {showStore ? <TableCell className="hidden text-muted-foreground lg:table-cell">{o.storeName}</TableCell> : null}
+                <TableCell className="text-right">
+                  <Money value={o.paid} tone="muted-zero" />
+                </TableCell>
+                <TableCell className="hidden text-right md:table-cell">
+                  <Money value={o.currentDebt} tone="debt" />
+                </TableCell>
+                <TableCell className="text-right font-medium">
+                  <Money value={o.total} />
+                </TableCell>
+                <TableCell className="hidden w-[24%] xl:table-cell">
+                  <OrderCommentCell storeId={o.storeId} orderId={o.id} comment={o.comment} />
+                </TableCell>
+                <TableCell>
+                  <UploadStatusToggle storeId={o.storeId} orderId={o.id} status={o.uploadStatus} />
+                </TableCell>
+                <TableCell className="hidden text-center sm:table-cell">
+                  {o.hasWaybill === null ? "—" : o.hasWaybill ? <Badge variant="outline">yes</Badge> : <span className="text-muted-foreground">no</span>}
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+        <TableFooter>
+          <TableRow className="hover:bg-transparent">
+            <TableCell colSpan={showStore ? 3 : 2}>სულ ({totals.count})</TableCell>
+            <TableCell className="text-right font-semibold">
+              <Money value={totals.paid} />
+            </TableCell>
+            <TableCell className="hidden md:table-cell" />
+            <TableCell className="text-right font-semibold">
+              <Money value={totals.total} currency />
+            </TableCell>
+            <TableCell colSpan={3} className="hidden xl:table-cell" />
+          </TableRow>
+        </TableFooter>
+      </Table>
+    </div>
+  );
+}

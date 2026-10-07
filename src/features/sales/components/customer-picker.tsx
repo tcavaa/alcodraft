@@ -1,0 +1,81 @@
+"use client";
+
+import { Check, ChevronsUpDown } from "lucide-react";
+import { useState } from "react";
+
+import { Money } from "@/components/money";
+import { Button } from "@/components/ui/button";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+
+import type { CustomerOption } from "../queries";
+
+export function CustomerPicker({
+  customers,
+  value,
+  onChange,
+  invalid,
+}: {
+  customers: CustomerOption[];
+  value: number | null;
+  onChange: (id: number) => void;
+  invalid?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = customers.find((c) => c.id === value) ?? null;
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          aria-invalid={invalid}
+          className={cn("h-auto min-h-11 w-full justify-between bg-card px-3 py-2 text-left font-normal", invalid && "border-destructive")}
+        >
+          {selected ? (
+            <span className="min-w-0">
+              <span className="block truncate font-medium">{selected.name}</span>
+              <span className="block truncate text-xs text-muted-foreground">
+                {[selected.address, selected.phone].filter(Boolean).join(" · ") || "—"}
+              </span>
+            </span>
+          ) : (
+            <span className="text-muted-foreground">აირჩიეთ კლიენტი…</span>
+          )}
+          <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-(--radix-popover-trigger-width) min-w-80 p-0" align="start">
+        <Command>
+          <CommandInput placeholder="ძებნა: სახელი, მისამართი, ტელეფონი…" />
+          <CommandList className="max-h-80">
+            <CommandEmpty>კლიენტი ვერ მოიძებნა.</CommandEmpty>
+            <CommandGroup>
+              {customers.map((c) => (
+                <CommandItem
+                  key={c.id}
+                  value={`${c.name} ${c.address} ${c.phone} #${c.id}`}
+                  onSelect={() => {
+                    onChange(c.id);
+                    setOpen(false);
+                  }}
+                  className="gap-2"
+                >
+                  <Check className={cn("size-4", value === c.id ? "opacity-100" : "opacity-0")} />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate">{c.name}</span>
+                    {c.address ? <span className="block truncate text-xs text-muted-foreground">{c.address}</span> : null}
+                  </span>
+                  <Money value={c.debt} tone="debt" className="text-xs" />
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}

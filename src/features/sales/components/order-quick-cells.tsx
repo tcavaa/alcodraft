@@ -39,14 +39,14 @@ export function UploadStatusToggle({
       type="button"
       onClick={toggle}
       className={cn(
-        "inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-xs font-medium transition-colors",
+        "inline-flex h-6 items-center gap-1 rounded-full border px-2 text-xs font-medium whitespace-nowrap transition-colors",
         uploaded
           ? "border-success/30 bg-success/10 text-success hover:bg-success/15"
           : "border-warning/40 bg-warning/10 text-warning hover:bg-warning/20",
       )}
       title="დააწკაპუნეთ სტატუსის შესაცვლელად"
     >
-      {uploaded ? <Check className="size-3.5" /> : <CloudUpload className="size-3.5" />}
+      {uploaded ? <Check className="size-3" /> : <CloudUpload className="size-3" />}
       {uploaded ? "ატვირთული" : "ასატვირთი"}
     </button>
   );
@@ -80,12 +80,13 @@ export function OrderCommentCell({ storeId, orderId, comment }: { storeId: numbe
         <button
           type="button"
           className={cn(
-            "group flex w-full max-w-sm items-start gap-1.5 rounded-md px-1.5 py-1 text-left text-sm hover:bg-muted",
+            "group relative flex w-full max-w-sm items-start rounded-md px-1.5 py-1 text-left text-sm hover:bg-muted",
             !comment && "text-muted-foreground/60",
           )}
         >
           <span className="line-clamp-2 flex-1 whitespace-pre-line">{comment || "კომენტარი"}</span>
-          <Pencil className="mt-0.5 size-3.5 shrink-0 opacity-0 group-hover:opacity-60" />
+          {/* Overlays on hover instead of reserving width in a tight table. */}
+          <Pencil className="absolute top-1.5 right-1 size-3.5 rounded-sm bg-muted opacity-0 group-hover:opacity-60" />
         </button>
       </PopoverTrigger>
       <PopoverContent className="w-[min(24rem,90vw)]" align="start">

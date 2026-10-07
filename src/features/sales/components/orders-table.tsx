@@ -30,7 +30,11 @@ export interface OrderRow {
   currentDebt: string;
 }
 
-/** Old orders/index, orders/ordershistory and orders/all in one table. */
+/**
+ * Old orders/index, orders/ordershistory and orders/all in one table. Kept compact so all columns fit
+ * next to the sidebar at 1280px: the store (all-stores view) sits under the customer instead of in a
+ * column of its own, and cells use slightly tighter padding.
+ */
 export function OrdersTable({
   rows,
   totals,
@@ -41,19 +45,14 @@ export function OrdersTable({
   showStore: boolean;
 }) {
   return (
-    <div className="overflow-hidden rounded-xl border bg-card">
+    <div className="overflow-hidden rounded-xl border bg-card [&_td]:px-1.5 [&_th]:px-1.5 [&_tr>*:first-child]:pl-3 [&_tr>*:last-child]:pr-3">
       <Table>
         <TableHeader>
           <TableRow className="bg-muted/40 hover:bg-muted/40">
             <SortableHead column="date" first="desc">
               თარიღი
             </SortableHead>
-            <SortableHead column="customer">დასახელება</SortableHead>
-            {showStore ? (
-              <SortableHead column="store" className="hidden lg:table-cell">
-                მაღაზია
-              </SortableHead>
-            ) : null}
+            <SortableHead column="customer">{showStore ? "დასახელება · მაღაზია" : "დასახელება"}</SortableHead>
             <SortableHead column="paid" className="text-right">
               აღებული თანხა
             </SortableHead>
@@ -84,11 +83,17 @@ export function OrdersTable({
                   <div className="text-xs text-muted-foreground tabular-nums">#{o.number}</div>
                 </TableCell>
                 <TableCell>
-                  <div className="max-w-[18rem]">
+                  <div className="max-w-[13rem]">
                     <Link href={storeHref(o.storeId, `customers/${o.customerId}`)} className="block truncate hover:underline" title={o.customerName}>
                       {o.customerName}
                     </Link>
-                    {o.customerAddress ? <div className="truncate text-xs text-muted-foreground">{o.customerAddress}</div> : null}
+                    {showStore || o.customerAddress ? (
+                      <div className="truncate text-xs text-muted-foreground">
+                        {showStore ? <span className="font-medium text-foreground/70">{o.storeName}</span> : null}
+                        {showStore && o.customerAddress ? " · " : null}
+                        {o.customerAddress}
+                      </div>
+                    ) : null}
                     {o.status !== "open" ? (
                       <div className="mt-1 flex items-center gap-2">
                         <Badge variant={o.status === "cancelled" ? "destructive" : "secondary"}>{ORDER_STATUS_LABEL[o.status]}</Badge>
@@ -101,7 +106,6 @@ export function OrdersTable({
                     ) : null}
                   </div>
                 </TableCell>
-                {showStore ? <TableCell className="hidden text-muted-foreground lg:table-cell">{o.storeName}</TableCell> : null}
                 <TableCell className="text-right">
                   <Money value={o.paid} tone="muted-zero" />
                 </TableCell>
@@ -111,14 +115,14 @@ export function OrdersTable({
                 <TableCell className="text-right font-medium">
                   <Money value={o.total} />
                 </TableCell>
-                <TableCell className="hidden w-[24%] xl:table-cell">
+                <TableCell className="hidden xl:table-cell">
                   <OrderCommentCell storeId={o.storeId} orderId={o.id} comment={o.comment} />
                 </TableCell>
                 <TableCell>
                   <UploadStatusToggle storeId={o.storeId} orderId={o.id} status={o.uploadStatus} />
                 </TableCell>
                 <TableCell className="hidden text-center sm:table-cell">
-                  {o.hasWaybill === null ? "—" : o.hasWaybill ? <Badge variant="outline">yes</Badge> : <span className="text-muted-foreground">no</span>}
+                  {o.hasWaybill === null ? "—" : o.hasWaybill ? <span className="font-medium">yes</span> : <span className="text-muted-foreground">no</span>}
                 </TableCell>
               </TableRow>
             );
@@ -126,7 +130,7 @@ export function OrdersTable({
         </TableBody>
         <TableFooter>
           <TableRow className="hover:bg-transparent">
-            <TableCell colSpan={showStore ? 3 : 2}>სულ ({totals.count})</TableCell>
+            <TableCell colSpan={2}>სულ ({totals.count})</TableCell>
             <TableCell className="text-right font-semibold">
               <Money value={totals.paid} />
             </TableCell>
@@ -134,7 +138,9 @@ export function OrdersTable({
             <TableCell className="text-right font-semibold">
               <Money value={totals.total} currency />
             </TableCell>
-            <TableCell colSpan={3} className="hidden xl:table-cell" />
+            <TableCell className="hidden xl:table-cell" />
+            <TableCell />
+            <TableCell className="hidden sm:table-cell" />
           </TableRow>
         </TableFooter>
       </Table>

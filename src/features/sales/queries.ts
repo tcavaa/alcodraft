@@ -245,7 +245,7 @@ export async function listCustomerOptionsWithDebt(storeId: number): Promise<Cust
 
 // ── Orders ──────────────────────────────────────────────────────────────────
 
-export const ORDER_SORTS = ["date", "customer", "store", "paid", "debt", "total", "comment", "status", "waybill"] as const;
+export const ORDER_SORTS = ["date", "customer", "paid", "debt", "total", "comment", "status", "waybill"] as const;
 export type OrderSort = (typeof ORDER_SORTS)[number];
 
 export interface OrderListParams {
@@ -294,7 +294,6 @@ export async function listOrders(storeIds: number[], p: OrderListParams) {
           by(
             {
               customer: customers.name,
-              store: stores.name,
               paid: orders.paidAmount,
               debt: currentDebt,
               total: orders.totalAmount,

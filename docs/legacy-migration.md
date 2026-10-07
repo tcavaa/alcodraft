@@ -61,7 +61,9 @@ Document numbers continue: operations and orders keep their old ids as `number`,
 
 1. Announce a short stop of the old system; make sure nobody saves.
 2. Export a fresh dump from cPanel → phpMyAdmin → `alcodraf_base` → Export (SQL).
-3. Load it locally (step 1 above), run `npm run legacy:import -- --reset`.
+3. Load it locally (step 1 above), run `npm run legacy:import -- --reset`. If the old app got a new
+   store copy (`drinks7`, `finance13`, …) since this project was built, add it to `STORE_SETS` in
+   `scripts/legacy/config.ts` first — the import only reads the table sets listed there.
 4. Check the report: all ✅; skim the ℹ️ items.
-5. Tell users to sign in at `https://<domain>/admin` with their old e-mail and password.
+5. Tell users to sign in at `https://alcodraft.vercel.app/admin` with their old e-mail and password.
 6. Keep the old app read-only (or offline) and the dump archived.

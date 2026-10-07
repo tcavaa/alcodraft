@@ -82,12 +82,12 @@ function DateField({
         min={min}
         max={max}
         onChange={(e) => onChange(e.target.value)}
-        data-empty={empty}
         className="peer h-9 w-[9.5rem] bg-card"
         aria-label={label}
       />
+      {/* An opaque cover, not CSS on the date's inner parts: Safari ignores those. Clicks go through. */}
       {empty ? (
-        <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-muted-foreground peer-focus:hidden">
+        <span className="pointer-events-none absolute inset-px flex items-center rounded-[calc(var(--radius-lg)-1px)] bg-card px-2.5 text-sm text-muted-foreground peer-focus:hidden">
           {label}
         </span>
       ) : null}

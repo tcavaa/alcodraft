@@ -11,6 +11,7 @@ import { Decimal, toDb } from "../../src/lib/money";
 import type * as s from "../../src/server/db/schema";
 import {
   DEFAULT_PLACEHOLDER_COMMENTS,
+  DROPPED_FINANCE_ROWS,
   type LegacyStoreSet,
   RETURNS_SUPPLIER_PATTERN,
   STORE_SETS,
@@ -52,6 +53,7 @@ export interface ImportNotes {
   skippedEmptyReceipts: { store: string; count: number }[];
   emptyReceiptComments: { store: string; date: string; comment: string }[];
   droppedZeroFinanceRows: { table: string; count: number }[];
+  removedFinanceRows: { table: string; ids: number[] }[];
   deliveryAdjustments: { store: string; count: number; total: string }[];
   financeAdjustments: { table: string; count: number; total: string }[];
   financeLinks: { table: string; delivery: number; supplier: number; employee: number }[];
@@ -137,6 +139,7 @@ export async function buildImport(legacy: Legacy): Promise<{ data: ImportData; n
     skippedEmptyReceipts: [],
     emptyReceiptComments: [],
     droppedZeroFinanceRows: [],
+    removedFinanceRows: [],
     deliveryAdjustments: [],
     financeAdjustments: [],
     financeLinks: [],
@@ -604,7 +607,13 @@ export async function buildImport(legacy: Legacy): Promise<{ data: ImportData; n
       let adjCount = 0;
       let adjTotal = new Decimal(0);
       const links = { delivery: 0, supplier: 0, employee: 0 };
+      const removed: number[] = [];
       for (const r of await legacy.rows(`SELECT * FROM ${book.table} ORDER BY id`)) {
+        if (DROPPED_FINANCE_ROWS[book.table]?.includes(Number(r.id))) {
+          // `previous` is left as is, so the next row's correction absorbs the removed rows' net effect.
+          removed.push(Number(r.id));
+          continue;
+        }
         const out = money4(r.money);
         const income = money4(r.darchenili);
         const stored = money4(r.balance);
@@ -663,6 +672,7 @@ export async function buildImport(legacy: Legacy): Promise<{ data: ImportData; n
         });
       }
       notes.droppedZeroFinanceRows.push({ table: book.table, count: dropped });
+      if (removed.length) notes.removedFinanceRows.push({ table: book.table, ids: removed });
       notes.financeAdjustments.push({ table: book.table, count: adjCount, total: adjTotal.toString() });
       notes.financeLinks.push({ table: book.table, ...links });
     }

@@ -35,17 +35,13 @@ Informational (expected differences, explained in the report): supplier remainin
 `(int)` truncation), customer "all days together" totals (old page counted orphan item rows),
 months where the old monthly page misread typos.
 
-Known data quirk kept as recorded: in გეალკო თბილისი „ფინანსები“ on 20.05.2024 an expense of
-20 000 000 000 005 ₾ was entered by mistake and reversed by an income of the same amount (old ids
-2442/2443). Balances are unaffected, but all-time and May 2024 totals look absurd until those two
-rows are removed.
-
 ## Cleaning rules (transform.ts)
 
 | Situation in the old data | What the import does |
 |---|---|
 | Item rows with nothing delivered/gifted/left (one per product per form; 97% of rows) | dropped |
 | Cash-book rows with 0 expense and 0 income (old list hid them) | dropped |
+| Typo pair in გეალკო თბილისი „ფინანსები“ (ids 2442/2443: 20 000 000 000 005 ₾ out, then in — an attempt to zero a 0.20 float leftover) | left out at the owner's request (`DROPPED_FINANCE_ROWS` in `config.ts`); their −0.20 net goes into the next entry's correction, so balances are unchanged |
 | Text in number fields (`"30 ზაზას ბენზინი"`, `"1072,3"`, `"გასწორება"`) | value PHP 7 used (`scripts/legacy/php.ts`, tested against real PHP 7.4); raw text kept in the row's `legacy` jsonb |
 | Stored debt/balance that doesn't follow the formula (manual DB edits) | difference stored in `adjustment_amount` → every number identical |
 | Rows pointing at deleted products/customers | recreated as archived `[წაშლილი პროდუქტი #id]` / `[წაშლილი კლიენტი #id]` |

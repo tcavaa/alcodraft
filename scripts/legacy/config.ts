@@ -83,5 +83,13 @@ export const SUPER_ADMIN_EMAILS = ["admin@alcodraft.ge"];
 /** The "returned goods" supplier lists every product on its stock-receipt form. */
 export const RETURNS_SUPPLIER_PATTERN = /დაბრუნებული/;
 
+/**
+ * Cash-book rows left out at the owner's request (2026-10-07). In გეალკო თბილისი „ფინანსები“ a float
+ * leftover of 0.20 (row 2441) was zeroed by typing 20000000000005 as an expense (the dot got lost) and
+ * then the same amount as income. The pair's net effect (−0.20) is absorbed by the next row's
+ * correction, so every later balance stays exactly as the old app showed it.
+ */
+export const DROPPED_FINANCE_ROWS: Record<string, number[]> = { finance: [2442, 2443] };
+
 /** Placeholder text the old forms pre-filled into comment fields. */
 export const DEFAULT_PLACEHOLDER_COMMENTS = new Set(["Comment"]);

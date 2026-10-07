@@ -1,6 +1,6 @@
 # Legacy import report
 
-Generated 2026-10-07 00:59 UTC by `npm run legacy:verify`.
+Generated 2026-10-07 01:12 UTC by `npm run legacy:verify`.
 
 ## Checks
 
@@ -10,7 +10,7 @@ Generated 2026-10-07 00:59 UTC by `npm run legacy:verify`.
 | ✅ | გეალკო თბილისი (set1): current debt of every customer | 259 customers, 0 differ. Net debt old 126247.62 / new 126247.62; positive-only total 136996.12 |
 | ✅ | გეალკო თბილისი (set1): Σ operation totals and Σ money taken | total old 1569248.5 / new 1569248.5; paid old 1396637.53 / new 1396637.53 |
 | ✅ | გეალკო თბილისი (set1): warehouse stock of every product | 98 products, 0 differ |
-| ✅ | გეალკო თბილისი (set1): ფინანსები (finance) balance after every entry | 9492 entries compared, 0 differ. Final balance old 17613.5 / new 17613.5 |
+| ✅ | გეალკო თბილისი (set1): ფინანსები (finance) balance after every entry | 9490 entries compared, 0 differ. Final balance old 17613.5 / new 17613.5 |
 | ✅ | გეალკო თბილისი (set1): ფინანსები monthly totals | 51 months. 1 month(s) look different from the old monthly page because it read text like "1072,3" as 10723 (the balance used 1072). |
 | ✅ | გეალკო თბილისი (set1): ფინანსები 2 (finance2) balance after every entry | 20 entries compared, 0 differ. Final balance old -1576 / new -1576 |
 | ✅ | გეალკო თბილისი (set1): ფინანსები 2 monthly totals | 5 months. 0 month(s) look different from the old monthly page because it read text like "1072,3" as 10723 (the balance used 1072). |
@@ -121,7 +121,7 @@ Generated 2026-10-07 00:59 UTC by `npm run legacy:verify`.
 | orderItems | 15540 |
 | stockReceipts | 1904 |
 | stockReceiptItems | 4786 |
-| financeEntries | 11663 |
+| financeEntries | 11661 |
 | users | 9 |
 | userStores | 30 |
 
@@ -149,6 +149,7 @@ Generated 2026-10-07 00:59 UTC by `npm run legacy:verify`.
   - `finance7`: 507
   - `finance9`: 311
   - `finance11`: 47
+- **Typo rows left out at the owner's request:** `finance` ids 2442, 2443 (20 000 000 000 005 ₾ entered and reversed; their −0.20 net moved into the next entry's correction, so balances are unchanged).
 - **Manual debt corrections kept as adjustments.** Where the stored debt did not follow `previous + total − paid` (edits made directly in the database), the difference is stored on that operation so every debt stays exactly as it was:
   - set1: 38 operation(s), net -46363.35 ₾
   - set2: 6 operation(s), net -3492 ₾

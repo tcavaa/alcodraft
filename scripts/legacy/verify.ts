@@ -16,7 +16,7 @@ import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import { Decimal } from "../../src/lib/money";
 import { createPool } from "../../src/server/db/pool";
 import * as s from "../../src/server/db/schema";
-import { STORE_SETS } from "./config";
+import { DROPPED_FINANCE_ROWS, STORE_SETS } from "./config";
 import { legacyDate, money4, phpInt, phpNumber } from "./php";
 import { type Legacy, openLegacy } from "./source";
 import { buildImport, type ImportNotes } from "./transform";
@@ -189,7 +189,9 @@ export async function runVerification(args: {
       // Old "თვის ბრუნვა" page: floatval(str_replace([',', ' '], '', value)) per month.
       const monthOld = new Map<string, { out: Decimal; inc: Decimal }>();
       const monthArith = new Map<string, { out: Decimal; inc: Decimal }>();
+      const removed = new Set(DROPPED_FINANCE_ROWS[book.table] ?? []);
       for (const r of old) {
+        if (removed.has(Number(r.id))) continue; // left out on purpose (see config.ts)
         const iso = legacyDate(r.date);
         if (!iso) continue;
         const m = iso.slice(0, 7);
@@ -358,6 +360,10 @@ async function writeReport(checks: Check[], notes: ImportNotes, counts: Record<s
   for (const d of notes.droppedZeroItemRows) lines.push(`  - ${d.store} \`${d.table}\`: ${d.rows}`);
   lines.push("- **Zero cash-book rows dropped** (the old list already hid them; they never changed a balance):");
   for (const d of notes.droppedZeroFinanceRows) lines.push(`  - \`${d.table}\`: ${d.count}`);
+  for (const d of notes.removedFinanceRows)
+    lines.push(
+      `- **Typo rows left out at the owner's request:** \`${d.table}\` ids ${d.ids.join(", ")} (20 000 000 000 005 ₾ entered and reversed; their −0.20 net moved into the next entry's correction, so balances are unchanged).`,
+    );
   lines.push(
     "- **Manual debt corrections kept as adjustments.** Where the stored debt did not follow `previous + total − paid` (edits made directly in the database), the difference is stored on that operation so every debt stays exactly as it was:",
   );

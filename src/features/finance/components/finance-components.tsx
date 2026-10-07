@@ -22,7 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import type { ActionResult } from "@/lib/action-result";
-import { dec, parseAmount } from "@/lib/money";
+import { dec, formatMoney, parseAmount } from "@/lib/money";
 import { storeHref } from "@/lib/routes";
 
 import {
@@ -101,7 +101,7 @@ export function AddEntryDialog({ storeId, accountId, accountName }: { storeId: n
           </Field>
           {!net.isZero() ? (
             <p className="text-sm text-muted-foreground">
-              ბალანსი შეიცვლება: <span className={net.isNegative() ? "text-destructive" : "text-success"}>{net.isNegative() ? "" : "+"}{net.toString()} ₾</span>
+              ბალანსი შეიცვლება: <span className={net.isNegative() ? "text-destructive" : "text-success"}>{net.isNegative() ? "" : "+"}{formatMoney(net)}</span>
             </p>
           ) : null}
         </FieldGroup>

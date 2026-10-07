@@ -94,28 +94,28 @@ export async function getProductMovements(productId: number, limit: number): Pro
     date: string;
     delta: number;
     label: string;
-    sort_key: number;
+    sort_at: string;
   }>(sql`
     (select 'receipt' as kind, r.id as ref_id, r.number, r.receipt_date::text as date, i.quantity as delta,
-            coalesce(s.name, '') as label, r.id as sort_key
+            coalesce(s.name, '') as label, r.created_at as sort_at
        from ${stockReceiptItems} i
        join ${stockReceipts} r on r.id = i.receipt_id
        left join ${suppliers} s on s.id = r.supplier_id
       where i.product_id = ${productId}
       order by r.id desc limit ${limit})
     union all
-    (select 'delivery', d.id, d.number, d.delivery_date::text, -(i.quantity + i.gift_qty), c.name, d.id
+    (select 'delivery', d.id, d.number, d.delivery_date::text, -(i.quantity + i.gift_qty), c.name, d.created_at
        from ${deliveryItems} i
        join ${deliveries} d on d.id = i.delivery_id
        join ${customers} c on c.id = d.customer_id
       where i.product_id = ${productId}
       order by d.id desc limit ${limit})
     union all
-    (select 'adjustment', a.id, null, (a.created_at at time zone 'Asia/Tbilisi')::date::text, a.quantity_delta, a.reason, a.id
+    (select 'adjustment', a.id, null, (a.created_at at time zone 'Asia/Tbilisi')::date::text, a.quantity_delta, a.reason, a.created_at
        from ${stockAdjustments} a
       where a.product_id = ${productId}
       order by a.id desc limit ${limit})
-    order by date desc, sort_key desc
+    order by date desc, sort_at desc
     limit ${limit}
   `);
   return result.rows.map((r) => ({

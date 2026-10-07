@@ -69,7 +69,10 @@ form submit ──► Server Action (features/x/actions.ts)
 
 - `cacheComponents: true`, `partialPrefetching: true` (see `next.config.ts`). We do **not** use
   `"use cache"` for business data — numbers must always be live.
-- Every route segment under `/admin` has a `loading.tsx` → pages may `await` params/cookies/DB.
+- **Every page folder** under `/admin` has its own `loading.tsx` (skeletons in `src/components/page-skeleton.tsx`).
+  A parent folder's `loading.tsx` does not cover a click between sibling pages (the shared layout stays
+  mounted), so without one per page the navigation blocks and the dev overlay reports a blocking-route
+  insight. Pages may then `await` params/cookies/DB at the top.
 - Layout parts that need the session (sidebar) or the URL (⌘K palette) are wrapped in `<Suspense>`.
 - Nothing random or time-dependent renders in the static shell (fixed skeleton widths; date
   presets computed in click handlers).

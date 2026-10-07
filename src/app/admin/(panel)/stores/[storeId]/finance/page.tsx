@@ -96,22 +96,22 @@ export default async function FinancePage({ params, searchParams }: PageProps<"/
         <StatCard label="ხარჯი (ფილტრით)" value={<Money value={list.totalOut} currency />} />
       </div>
 
-      <div className="mb-3 flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <SearchInput placeholder="კომენტარის ძებნა…" />
-          <DateRangeFilter />
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <SearchInput className="sm:w-72" placeholder="კომენტარის ძებნა…" />
+        <DateRangeFilter />
+        <div className="flex flex-wrap gap-2 sm:ml-auto">
+          <ParamSelect
+            param="dir"
+            value={dir === "in" || dir === "out" ? dir : "all"}
+            label="ტიპი"
+            className="w-48"
+            options={[
+              { value: "all", label: "ყველა" },
+              { value: "in", label: "შემოსავალი" },
+              { value: "out", label: "ხარჯი" },
+            ]}
+          />
         </div>
-        <ParamSelect
-          param="dir"
-          value={dir === "in" || dir === "out" ? dir : "all"}
-          label="ტიპი"
-          className="w-48"
-          options={[
-            { value: "all", label: "ყველა" },
-            { value: "in", label: "შემოსავალი" },
-            { value: "out", label: "ხარჯი" },
-          ]}
-        />
       </div>
 
       {list.rows.length === 0 ? (

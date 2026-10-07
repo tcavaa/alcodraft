@@ -96,7 +96,7 @@ export default async function OperationPage({
         </div>
       ) : null}
 
-      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+      <div className="grid items-start gap-6 2xl:grid-cols-[minmax(0,1fr)_22rem]">
         {d.kind === "adjustment" ? (
           <Card>
             <CardHeader>
@@ -192,7 +192,7 @@ export default async function OperationPage({
           </div>
         )}
 
-        <div className="space-y-4">
+        <div className="grid items-start gap-4 md:grid-cols-2 2xl:grid-cols-1">
           <Card>
             <CardHeader>
               <CardTitle className="text-base">ინფორმაცია</CardTitle>

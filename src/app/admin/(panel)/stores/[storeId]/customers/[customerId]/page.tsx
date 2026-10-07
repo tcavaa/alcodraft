@@ -248,7 +248,9 @@ async function OperationsTable({
                   <TableCell className="text-right font-medium">
                     <Money value={op.debtAfter} tone="debt" />
                   </TableCell>
-                  <TableCell className="hidden max-w-xs truncate text-muted-foreground xl:table-cell">{op.comment}</TableCell>
+                  <TableCell className="hidden text-muted-foreground xl:table-cell">
+                    <div className="max-w-xs truncate" title={op.comment || undefined}>{op.comment}</div>
+                  </TableCell>
                 </TableRow>
               );
             })}

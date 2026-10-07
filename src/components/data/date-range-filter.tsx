@@ -31,22 +31,27 @@ export function DateRangeFilter({ className }: { className?: string }) {
   };
 
   return (
+    // Two groups so a narrow toolbar wraps between them, never inside the date pair.
     <div className={cn("flex flex-wrap items-center gap-1.5", pending && "opacity-70", className)}>
-      <CalendarRange className="size-4 text-muted-foreground" />
-      <Input type="date" value={from} max={to || undefined} onChange={(e) => apply({ from: e.target.value })} className="h-9 w-[9.5rem] bg-card" aria-label="დან" />
-      <span className="text-muted-foreground">—</span>
-      <Input type="date" value={to} min={from || undefined} onChange={(e) => apply({ to: e.target.value })} className="h-9 w-[9.5rem] bg-card" aria-label="მდე" />
-      <Button variant="ghost" size="sm" onClick={() => apply({ from: todayIso(), to: todayIso() })}>
-        დღეს
-      </Button>
-      <Button variant="ghost" size="sm" onClick={() => apply({ from: `${todayIso().slice(0, 7)}-01`, to: todayIso() })}>
-        ეს თვე
-      </Button>
-      {from || to ? (
-        <Button variant="ghost" size="icon-sm" onClick={() => apply({ from: "", to: "" })} aria-label="გასუფთავება">
-          <X />
+      <div className="flex items-center gap-1.5">
+        <CalendarRange className="size-4 shrink-0 text-muted-foreground" />
+        <Input type="date" value={from} max={to || undefined} onChange={(e) => apply({ from: e.target.value })} className="h-9 w-[9.5rem] bg-card" aria-label="დან" />
+        <span className="text-muted-foreground">—</span>
+        <Input type="date" value={to} min={from || undefined} onChange={(e) => apply({ to: e.target.value })} className="h-9 w-[9.5rem] bg-card" aria-label="მდე" />
+      </div>
+      <div className="flex items-center">
+        <Button variant="ghost" size="sm" onClick={() => apply({ from: todayIso(), to: todayIso() })}>
+          დღეს
         </Button>
-      ) : null}
+        <Button variant="ghost" size="sm" onClick={() => apply({ from: `${todayIso().slice(0, 7)}-01`, to: todayIso() })}>
+          ეს თვე
+        </Button>
+        {from || to ? (
+          <Button variant="ghost" size="icon-sm" onClick={() => apply({ from: "", to: "" })} aria-label="გასუფთავება">
+            <X />
+          </Button>
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -152,7 +152,7 @@ export function OperationForm({
   const debtAfter = customer ? dec(customer.debt).plus(total).minus(paid) : null;
 
   return (
-    <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+    <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
       <div className="min-w-0 space-y-4">
         <div className="max-w-xl">
           <CustomerPicker customers={customers} value={customerId} onChange={setCustomerId} invalid={Boolean(errors.customerId)} />

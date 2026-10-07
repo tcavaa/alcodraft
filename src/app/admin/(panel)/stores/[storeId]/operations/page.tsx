@@ -63,12 +63,10 @@ export default async function OperationsPage({ params, searchParams }: PageProps
         }
       />
 
-      <div className="mb-3 flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <SearchInput placeholder="კლიენტი, კომენტარი ან №…" />
-          <DateRangeFilter />
-        </div>
-        <div className="flex gap-2">
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <SearchInput className="sm:w-72" placeholder="კლიენტი, კომენტარი ან №…" />
+        <DateRangeFilter />
+        <div className="flex flex-wrap gap-2 sm:ml-auto">
           <ParamSelect
             param="kind"
             value={kind ?? "all"}

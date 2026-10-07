@@ -45,6 +45,6 @@ npm run legacy:verify  # re-check imported numbers, writes docs/migration/legacy
 2. **Debts and cash balances are never stored** — they are sums over rows (see business-logic.md). Stock *is* stored (`products.stock_qty`) and only changed inside the same transaction as the document that moves it.
 3. **Every write goes through a service in `src/features/*/service.ts`, inside `db.transaction`,** called from a Server Action that first authorizes with `authorizeStore()` / `authorizeSuperAdmin()`. Services write an `audit()` line.
 4. **Pages authorize with `requireStore()` / `requireSuperAdmin()`** (they 404 when access is missing) and read through `src/features/*/queries.ts`.
-5. **Cache Components:** anything that reads cookies, params, searchParams or the DB must be under a `<Suspense>` (route `loading.tsx` counts). No `Date.now()`/`Math.random()` during render of static parts.
+5. **Cache Components:** anything that reads cookies, params, searchParams or the DB must be under a `<Suspense>` (every page folder has its own `loading.tsx` — add one with every new page). No `Date.now()`/`Math.random()` during render of static parts.
 6. **UI text is Georgian**; code, comments and docs are English. Reuse the old app's wording where users know it (e.g. „დღის ჩახურვა“, „დარჩენილი“, „ნაშთი“).
 7. Business dates are Tbilisi dates (`todayIso()`), stored as `date` strings `YYYY-MM-DD`.

@@ -81,7 +81,7 @@ export default async function SupplierPage({ params }: PageProps<"/admin/stores/
                   <TableRow>
                     <TableHead className="pl-6">თარიღი</TableHead>
                     <TableHead className="text-right">ჯამში</TableHead>
-                    <TableHead className="hidden pr-6 sm:table-cell">კომენტარი</TableHead>
+                    <TableHead className="hidden pr-6 sm:table-cell xl:hidden 2xl:table-cell">კომენტარი</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -96,7 +96,9 @@ export default async function SupplierPage({ params }: PageProps<"/admin/stores/
                       <TableCell className="text-right">
                         <Money value={r.cost} />
                       </TableCell>
-                      <TableCell className="hidden max-w-[12rem] truncate pr-6 text-muted-foreground sm:table-cell">{r.comment}</TableCell>
+                      <TableCell className="hidden pr-6 text-muted-foreground sm:table-cell xl:hidden 2xl:table-cell">
+                        <div className="max-w-[12rem] truncate" title={r.comment || undefined}>{r.comment}</div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -119,7 +121,7 @@ export default async function SupplierPage({ params }: PageProps<"/admin/stores/
                   <TableRow>
                     <TableHead className="pl-6">თარიღი</TableHead>
                     <TableHead className="text-right">თანხა</TableHead>
-                    <TableHead className="hidden pr-6 sm:table-cell">კომენტარი</TableHead>
+                    <TableHead className="hidden pr-6 sm:table-cell xl:hidden 2xl:table-cell">კომენტარი</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -129,7 +131,9 @@ export default async function SupplierPage({ params }: PageProps<"/admin/stores/
                       <TableCell className="text-right">
                         <Money value={dec(p.amountOut).minus(p.amountIn)} />
                       </TableCell>
-                      <TableCell className="hidden max-w-[12rem] truncate pr-6 text-muted-foreground sm:table-cell">{p.note}</TableCell>
+                      <TableCell className="hidden pr-6 text-muted-foreground sm:table-cell xl:hidden 2xl:table-cell">
+                        <div className="max-w-[12rem] truncate" title={p.note || undefined}>{p.note}</div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

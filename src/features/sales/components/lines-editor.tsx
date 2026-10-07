@@ -114,12 +114,12 @@ export function LinesEditor({
           <thead className="sticky top-0 z-10 bg-card shadow-[0_1px_0_var(--border)]">
             <tr className="text-xs text-muted-foreground">
               <th className="px-3 py-2.5 text-left font-medium">დასახელება</th>
-              <th className="w-28 px-2 py-2.5 text-right font-medium">{mode === "entry" ? "ფასი" : "ერთ. ფასი"}</th>
-              {stockMode !== "off" ? <th className="w-20 px-2 py-2.5 text-right font-medium">მარაგი</th> : null}
-              <th className="w-24 px-2 py-2.5 text-right font-medium">შეტანილი</th>
-              <th className="w-24 px-2 py-2.5 text-right font-medium">საჩუქარი</th>
-              <th className="w-24 px-2 py-2.5 text-right font-medium">ნაშთი</th>
-              <th className="w-32 px-3 py-2.5 text-right font-medium">ჯამი</th>
+              <th className="w-[4.75rem] px-1.5 py-2.5 text-right font-medium">{mode === "entry" ? "ფასი" : "ერთ. ფასი"}</th>
+              {stockMode !== "off" ? <th className="w-14 px-1.5 py-2.5 text-right font-medium">მარაგი</th> : null}
+              <th className="w-[4.25rem] px-1.5 py-2.5 text-right font-medium">შეტანილი</th>
+              <th className="w-[4.25rem] px-1.5 py-2.5 text-right font-medium">საჩუქარი</th>
+              <th className="w-[4.25rem] px-1.5 py-2.5 text-right font-medium">ნაშთი</th>
+              <th className="w-24 px-3 py-2.5 text-right font-medium">ჯამი</th>
             </tr>
           </thead>
           <tbody>
@@ -144,7 +144,7 @@ export function LinesEditor({
                     <div className="font-medium">{p.name}</div>
                     {p.supplierName ? <div className="text-xs text-muted-foreground">{p.supplierName}</div> : null}
                   </td>
-                    <td className="px-2 py-1.5">
+                    <td className="px-1.5 py-1.5">
                       <Input
                         value={l.price}
                         onChange={(e) => onChange(p.id, "price", e.target.value)}
@@ -155,7 +155,7 @@ export function LinesEditor({
                         inputMode="decimal"
                         aria-label={`${p.name} — ფასი`}
                         aria-invalid={l.price !== "" && !parseAmount(l.price)}
-                        className={cn("h-8 text-right tabular-nums", priceChanged && "border-warning text-warning")}
+                        className={cn("h-8 px-2 text-right tabular-nums", priceChanged && "border-warning text-warning")}
                       />
                       {mode === "entry" && unit && discountFactor !== "1" && filled ? (
                         <div className="mt-0.5 text-right text-[0.7rem] text-muted-foreground tabular-nums">
@@ -166,7 +166,7 @@ export function LinesEditor({
                   {stockMode !== "off" ? (
                     <td
                       className={cn(
-                        "px-2 py-1.5 text-right tabular-nums",
+                        "px-1.5 py-1.5 text-right tabular-nums",
                         p.stockQty <= 0 ? "text-destructive" : "text-muted-foreground",
                       )}
                     >
@@ -174,7 +174,7 @@ export function LinesEditor({
                     </td>
                   ) : null}
                   {QTY_FIELDS.map((field, i) => (
-                    <td key={field} className="px-2 py-1.5">
+                    <td key={field} className="px-1.5 py-1.5">
                       <Input
                         value={l[field]}
                         onChange={(e) => onChange(p.id, field, e.target.value)}
@@ -187,7 +187,7 @@ export function LinesEditor({
                         aria-label={`${p.name} — ${field}`}
                         aria-invalid={parseQty(l[field]) === null || (field === "quantity" && overStock && stockMode === "block")}
                         className={cn(
-                          "h-8 text-right tabular-nums placeholder:text-muted-foreground/40",
+                          "h-8 px-2 text-right tabular-nums placeholder:text-muted-foreground/40",
                           field === "quantity" && overStock && "border-destructive text-destructive",
                         )}
                       />

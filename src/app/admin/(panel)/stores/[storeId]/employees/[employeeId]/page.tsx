@@ -96,7 +96,9 @@ export default async function EmployeePage({ params }: PageProps<"/admin/stores/
                       <TableCell className="text-right">
                         <Money value={dec(p.amountOut).minus(p.amountIn)} />
                       </TableCell>
-                      <TableCell className="max-w-[14rem] truncate pr-6 text-muted-foreground">{p.note}</TableCell>
+                      <TableCell className="pr-6 text-muted-foreground">
+                        <div className="max-w-[14rem] truncate" title={p.note || undefined}>{p.note}</div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -128,7 +130,9 @@ export default async function EmployeePage({ params }: PageProps<"/admin/stores/
                       <TableCell className="text-right">
                         <Money value={a.amount} />
                       </TableCell>
-                      <TableCell className="max-w-[14rem] truncate pr-6 text-muted-foreground">{a.comment}</TableCell>
+                      <TableCell className="pr-6 text-muted-foreground">
+                        <div className="max-w-[14rem] truncate" title={a.comment || undefined}>{a.comment}</div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>

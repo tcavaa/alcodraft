@@ -1,6 +1,6 @@
 # Legacy import report
 
-Generated 2026-10-07 00:25 UTC by `npm run legacy:verify`.
+Generated 2026-10-07 00:59 UTC by `npm run legacy:verify`.
 
 ## Checks
 

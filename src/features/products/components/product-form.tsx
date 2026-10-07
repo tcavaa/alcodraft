@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 
 import { AmountField, FormError, TextAreaField, TextField } from "@/components/forms/fields";
 import { SubmitButton } from "@/components/forms/submit-button";
@@ -22,6 +22,13 @@ export function ProductForm({
 }) {
   const [state, formAction] = useActionState(action, undefined);
   const errors = state && !state.ok ? state.fieldErrors : undefined;
+  const supplierOptions = [
+    { value: "none", label: "— მომწოდებლის გარეშე —" },
+    ...suppliers
+      .filter((s) => !s.isArchived || s.id === defaults?.supplierId)
+      .map((s) => ({ value: String(s.id), label: s.name })),
+  ];
+  const [supplierId, setSupplierId] = useState(defaults?.supplierId ? String(defaults.supplierId) : "none");
 
   return (
     <form action={formAction} className="space-y-6">
@@ -36,19 +43,17 @@ export function ProductForm({
         />
         <Field data-invalid={Boolean(errors?.supplierId)} className="sm:col-span-2">
           <FieldLabel>მომწოდებელი</FieldLabel>
-          <Select name="supplierId" defaultValue={defaults?.supplierId ? String(defaults.supplierId) : "none"}>
+          <Select name="supplierId" value={supplierId} onValueChange={setSupplierId}>
             <SelectTrigger className="w-full">
-              <SelectValue />
+              {/* Label rendered on the server too (Radix fills an empty SelectValue only after hydration). */}
+              <SelectValue>{supplierOptions.find((o) => o.value === supplierId)?.label}</SelectValue>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="none">— მომწოდებლის გარეშე —</SelectItem>
-              {suppliers
-                .filter((s) => !s.isArchived || s.id === defaults?.supplierId)
-                .map((s) => (
-                  <SelectItem key={s.id} value={String(s.id)}>
-                    {s.name}
-                  </SelectItem>
-                ))}
+              {supplierOptions.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
           {errors?.supplierId ? <FieldError>{errors.supplierId}</FieldError> : null}

@@ -59,18 +59,18 @@ export default async function StockPage({ params, searchParams }: PageProps<"/ad
           </Button>
         }
       />
-      <div className="mb-3 flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <SearchInput placeholder="კომენტარი, მომწოდებელი ან №…" />
-          <DateRangeFilter />
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <SearchInput className="sm:w-72" placeholder="კომენტარი, მომწოდებელი ან №…" />
+        <DateRangeFilter />
+        <div className="flex flex-wrap gap-2 sm:ml-auto">
+          <ParamSelect
+            param="supplier"
+            value={supplierId ? String(supplierId) : "all"}
+            label="მომწოდებელი"
+            className="w-64"
+            options={[{ value: "all", label: "ყველა" }, ...suppliers.map((s) => ({ value: String(s.id), label: s.name }))]}
+          />
         </div>
-        <ParamSelect
-          param="supplier"
-          value={supplierId ? String(supplierId) : "all"}
-          label="მომწოდებელი"
-          className="w-64"
-          options={[{ value: "all", label: "ყველა" }, ...suppliers.map((s) => ({ value: String(s.id), label: s.name }))]}
-        />
       </div>
       {list.rows.length === 0 ? (
         <EmptyState icon={PackageOpen} title="მიღებები ვერ მოიძებნა" />
@@ -98,14 +98,16 @@ export default async function StockPage({ params, searchParams }: PageProps<"/ad
                   </TableCell>
                   <TableCell>
                     {r.supplierId ? (
-                      <Link href={storeHref(store.id, `suppliers/${r.supplierId}`)} className="hover:underline">
+                      <Link href={storeHref(store.id, `suppliers/${r.supplierId}`)} className="block max-w-[16rem] truncate hover:underline" title={r.supplierName ?? undefined}>
                         {r.supplierName}
                       </Link>
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}
                   </TableCell>
-                  <TableCell className="hidden max-w-sm truncate text-muted-foreground lg:table-cell">{r.comment}</TableCell>
+                  <TableCell className="hidden text-muted-foreground lg:table-cell">
+                    <div className="max-w-[14rem] truncate" title={r.comment || undefined}>{r.comment}</div>
+                  </TableCell>
                   <TableCell className="text-right tabular-nums">{r.lines ?? 0}</TableCell>
                   <TableCell className="text-right tabular-nums">{formatQty(r.quantity ?? 0)}</TableCell>
                   <TableCell className="text-right font-medium">

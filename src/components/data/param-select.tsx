@@ -38,7 +38,7 @@ export function ParamSelect({
     <Select value={value} onValueChange={onChange}>
       <SelectTrigger className={cn("h-9 bg-card", pending && "opacity-70", className)} aria-label={label}>
         {label ? <span className="text-muted-foreground">{label}:</span> : null}
-        <SelectValue />
+        <SelectValue>{options.find((o) => o.value === value)?.label}</SelectValue>
       </SelectTrigger>
       <SelectContent>
         {options.map((o) => (

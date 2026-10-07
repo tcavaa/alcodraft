@@ -35,6 +35,11 @@ Informational (expected differences, explained in the report): supplier remainin
 `(int)` truncation), customer "all days together" totals (old page counted orphan item rows),
 months where the old monthly page misread typos.
 
+Known data quirk kept as recorded: in გეალკო თბილისი „ფინანსები“ on 20.05.2024 an expense of
+20 000 000 000 005 ₾ was entered by mistake and reversed by an income of the same amount (old ids
+2442/2443). Balances are unaffected, but all-time and May 2024 totals look absurd until those two
+rows are removed.
+
 ## Cleaning rules (transform.ts)
 
 | Situation in the old data | What the import does |

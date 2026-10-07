@@ -43,7 +43,8 @@ export function DocumentEditForm({
   /** Customer's debt right before this document (operations only). */
   previousDebt: string | null;
 }) {
-  const factor = discountFactor ?? "1";
+  // numeric(6,4) comes back as "0.8500"; normalise so it matches the discount options ("0.85").
+  const factor = discountFactor ? dec(discountFactor).toString() : "1";
   const byProduct = new Map(initialLines.map((l) => [l.productId, l]));
   const [lines, setLines] = useState<LinesState>(() =>
     Object.fromEntries(
@@ -138,7 +139,7 @@ export function DocumentEditForm({
     });
 
   return (
-    <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
+    <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
       <div className="min-w-0">
         <LinesEditor
           products={ordered}

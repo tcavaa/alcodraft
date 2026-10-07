@@ -10,7 +10,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { type Decimal, dec, formatQty, parseAmount } from "@/lib/money";
+import { type Decimal, dec, formatDiscount, formatQty, parseAmount } from "@/lib/money";
 
 import { DISCOUNT_OPTIONS, PAYMENT_METHODS, type PaymentMethod } from "../logic";
 
@@ -65,12 +65,12 @@ export function SummaryPanel({
           <span className="text-sm text-muted-foreground">სულ ჯამში</span>
           <Money value={total} currency className="text-3xl font-semibold tracking-tight" />
         </div>
-        <div className="flex justify-between text-xs text-muted-foreground">
+        <div className="flex flex-wrap justify-between gap-x-3 gap-y-0.5 text-xs text-muted-foreground">
           <span>
             {lineCount} პროდუქტი · {formatQty(quantity)} ცალი{gifts ? ` · საჩუქარი ${formatQty(gifts)}` : ""}
           </span>
           {!leftoverValue.isZero() ? (
-            <span>
+            <span className="whitespace-nowrap">
               ნაშთი: <Money value={leftoverValue} />
             </span>
           ) : null}
@@ -85,7 +85,10 @@ export function SummaryPanel({
           disabled={!discountEditable}
         >
           <SelectTrigger className="w-full">
-            <SelectValue />
+            <SelectValue>
+              {DISCOUNT_OPTIONS.find((o) => o.factor === values.discountFactor)?.label ??
+                (formatDiscount(values.discountFactor) || values.discountFactor)}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             {DISCOUNT_OPTIONS.map((o) => (
@@ -94,7 +97,7 @@ export function SummaryPanel({
               </SelectItem>
             ))}
             {!DISCOUNT_OPTIONS.some((o) => o.factor === values.discountFactor) ? (
-              <SelectItem value={values.discountFactor}>{values.discountFactor}</SelectItem>
+              <SelectItem value={values.discountFactor}>{formatDiscount(values.discountFactor) || values.discountFactor}</SelectItem>
             ) : null}
           </SelectContent>
         </Select>

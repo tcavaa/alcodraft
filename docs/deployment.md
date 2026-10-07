@@ -6,7 +6,7 @@
 |---|---|---|
 | App | Vercel project, functions region **fra1** (`vercel.json`) | Next.js 16, Node ≥ 20.9 |
 | Database | Supabase project "Alcodraft", **eu-central-1** (Frankfurt), Postgres 17 | same region as the functions |
-| Backups | GitHub Actions nightly `pg_dump` (`.github/workflows/backup.yml`) | the Supabase free plan has no backups |
+| Backups | GitHub Actions nightly `pg_dump`, gpg-encrypted (`.github/workflows/backup.yml`) | the Supabase free plan has no backups |
 
 ## Environment variables
 
@@ -39,15 +39,32 @@ Locally they live in `.env.local` (git-ignored; template: `.env.example`). On Ve
 ## Backups
 
 `.github/workflows/backup.yml` runs nightly at 03:30 Tbilisi time (and on demand from the Actions
-tab): `pg_dump` of schemas `app` and `drizzle` through the session pooler, kept 30 days as a workflow
-artifact. Setup: GitHub repo → Settings → Secrets and variables → Actions → new secret
-`SUPABASE_DB_URL` = the **Session pooler** URI.
+tab): `pg_dump` of schemas `app` and `drizzle` through the session pooler, **encrypted with gpg
+(AES-256)** and kept 30 days as a workflow artifact. The repository is public and artifacts of public
+repositories can be downloaded by anyone, so an unencrypted dump must never be uploaded.
 
-Restore into an empty database:
+Setup: GitHub repo → Settings → Secrets and variables → Actions → two repository secrets:
+
+| Secret | Value |
+|---|---|
+| `SUPABASE_DB_URL` | the **Session pooler** URI (raw password is fine — the workflow splits it itself) |
+| `BACKUP_PASSPHRASE` | a long random passphrase; store a copy in your password manager — without it a backup cannot be opened |
+
+Until both exist the job is skipped with a notice (no failure e-mails). Test it once with
+Actions → Database backup → Run workflow.
+
+Restore (download the artifact zip from the run, unzip it, then):
 
 ```bash
-pg_restore --no-owner --no-privileges --dbname "$DATABASE_URL_SESSION" alcodraft-YYYY-MM-DD.dump
+gpg --decrypt alcodraft-YYYY-MM-DD.dump.gpg > alcodraft.dump
 ```
+
+```bash
+pg_restore --no-owner --no-privileges --dbname "postgresql://…session pooler URI…" alcodraft.dump
+```
+
+(`pg_restore` needs a percent-encoded password in a URI; alternatively set `PGHOST`, `PGPORT`,
+`PGUSER`, `PGPASSWORD`, `PGDATABASE` and pass only `alcodraft.dump`.)
 
 The daily dump also keeps the free Supabase project active (free projects pause after 7 days without
 activity; if it ever pauses, resume it from the Supabase dashboard).

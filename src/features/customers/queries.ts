@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, count, desc, eq, ilike, max, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, ilike, max, ne, or, sql, type SQL } from "drizzle-orm";
 
 import type { SortState } from "@/lib/sort";
 import { db } from "@/server/db";
@@ -190,7 +190,8 @@ export async function listCustomerDeliveries(
         ),
     })
     .from(deliveries)
-    .where(eq(deliveries.customerId, customerId))
+    // Counts („განაშთვა“) have their own tab; they never change the debt, so the running total is unaffected.
+    .where(and(eq(deliveries.customerId, customerId), ne(deliveries.kind, "count")))
     .as("running");
   const order = !sort
     ? [desc(running.id)]
@@ -219,7 +220,10 @@ export async function listCustomerDeliveries(
       .orderBy(...order)
       .limit(pageSize)
       .offset((page - 1) * pageSize),
-    db.select({ total: count() }).from(deliveries).where(eq(deliveries.customerId, customerId)),
+    db
+      .select({ total: count() })
+      .from(deliveries)
+      .where(and(eq(deliveries.customerId, customerId), ne(deliveries.kind, "count"))),
   ]);
   return { rows, total };
 }

@@ -20,6 +20,7 @@ import { StatCard } from "@/components/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { FilterTabs } from "@/components/data/filter-tabs";
 import { MonthlyBars } from "@/features/dashboard/monthly-bars";
 import {
   getMonthlySales,
@@ -29,17 +30,21 @@ import {
   getTopDebtors,
   getTopProducts,
 } from "@/features/dashboard/queries";
+import { TOP_PERIOD_VALUES, TOP_PERIODS } from "@/features/dashboard/top-periods";
 import { OPERATION_KIND_LABEL, operationKind } from "@/features/sales/labels";
 import { formatDate, formatMonth, todayIso } from "@/lib/dates";
 import { formatQty } from "@/lib/money";
+import { enumParam } from "@/lib/search-params";
 import { cn } from "@/lib/utils";
 import { requireStore } from "@/server/auth/dal";
 
 export const metadata: Metadata = { title: "დაფა" };
 
-export default async function StoreDashboardPage({ params }: PageProps<"/admin/stores/[storeId]">) {
+export default async function StoreDashboardPage({ params, searchParams }: PageProps<"/admin/stores/[storeId]">) {
   const { storeId } = await params;
   const { store } = await requireStore(storeId);
+  const sp = await searchParams;
+  const topPeriod = enumParam(sp, "top", TOP_PERIOD_VALUES) ?? "30d";
   const today = todayIso();
   const [kpisMap, monthly, recent, debtors, outOfStock, topProducts] = await Promise.all([
     getStoreKpis([store.id], today),
@@ -47,10 +52,11 @@ export default async function StoreDashboardPage({ params }: PageProps<"/admin/s
     getRecentDeliveries(store.id),
     getTopDebtors(store.id),
     getOutOfStock(store.id),
-    getTopProducts(store.id, today),
+    getTopProducts(store.id, today, topPeriod, 8),
   ]);
   const kpis = kpisMap.get(store.id)!;
   const href = (segment: string) => storeHref(store.id, segment);
+  const topHref = `${href("top-products")}${topPeriod === "30d" ? "" : `?period=${topPeriod}`}`;
 
   return (
     <>
@@ -132,16 +138,32 @@ export default async function StoreDashboardPage({ params }: PageProps<"/admin/s
         </Card>
 
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Trophy className="size-4 text-gold-strong" />
-              ყველაზე გაყიდვადი პროდუქცია
-            </CardTitle>
-            <CardDescription>ბოლო 30 დღე — შეტანილი რაოდენობით</CardDescription>
+          <CardHeader className="flex-row items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Trophy className="size-4 text-gold-strong" />
+                ყველაზე გაყიდვადი პროდუქცია
+              </CardTitle>
+              <CardDescription>შეტანილი რაოდენობით</CardDescription>
+            </div>
+            <Button variant="ghost" size="sm" asChild>
+              <Link href={topHref}>
+                ყველა <ArrowRight />
+              </Link>
+            </Button>
           </CardHeader>
           <CardContent className="space-y-1">
+            <div className="mb-2">
+              <FilterTabs
+                pathname={href("")}
+                searchParams={sp}
+                param="top"
+                value={topPeriod}
+                options={TOP_PERIODS.map((p) => ({ value: p.value, label: p.label }))}
+              />
+            </div>
             {topProducts.length === 0 ? (
-              <p className="text-sm text-muted-foreground">ბოლო 30 დღეში გაყიდვა არ ყოფილა.</p>
+              <p className="px-2 text-sm text-muted-foreground">ამ პერიოდში გაყიდვა არ ყოფილა.</p>
             ) : (
               topProducts.map((p, i) => (
                 <Link
@@ -165,6 +187,14 @@ export default async function StoreDashboardPage({ params }: PageProps<"/admin/s
                 </Link>
               ))
             )}
+            {topProducts.length === 8 ? (
+              <Link
+                href={topHref}
+                className="block rounded-lg px-2 py-1.5 text-center text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                სრული სია
+              </Link>
+            ) : null}
           </CardContent>
         </Card>
       </div>

@@ -14,6 +14,7 @@ src/
       settings/{stores,users,audit}   super admin only
       stores/[storeId]/        one store; every store has the same sections:
         page.tsx               dashboard
+        top-products/          best sellers ranking (30 days / 6 months / 1 year), from the dashboard card
         operations/            old "distribution" (list, new, [id], [id]/edit)
         orders/                old "orders" (list/history, new, [id] = edit/complete)
         customers/             old "company" (list, new, [id], [id]/edit)

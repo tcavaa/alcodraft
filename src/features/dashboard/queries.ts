@@ -6,6 +6,8 @@ import { db } from "@/server/db";
 import { cashSumOrZero, debtSum } from "@/server/db/expressions";
 import { customers, deliveries, deliveryItems, financeAccounts, financeEntries, orders, products } from "@/server/db/schema";
 
+import { type TopPeriod, topPeriodStart } from "./top-periods";
+
 /** Σ(total − paid + correction) — a customer's debt, the old `darchenili`. */
 
 export interface StoreKpis {
@@ -155,24 +157,29 @@ export async function getOutOfStock(storeId: number, limit = 8) {
     .limit(limit);
 }
 
-/** Best sellers by units delivered over the last `days` days (today included); gifts not counted. */
-export async function getTopProducts(storeId: number, today: string, days = 30, limit = 8) {
-  const [y, m, d] = today.split("-").map(Number);
-  const start = new Date(Date.UTC(y, m - 1, d - (days - 1))).toISOString().slice(0, 10);
+/**
+ * Best sellers by units delivered („შეტანილი“) in the period, most first; gifts are shown but not
+ * ranked. No `limit` = every product sold in the period.
+ */
+export async function getTopProducts(storeId: number, today: string, period: TopPeriod, limit?: number) {
   const quantity = sql<number>`sum(${deliveryItems.quantity})::int`;
-  return db
+  const query = db
     .select({
       id: products.id,
       name: products.name,
+      stock: products.stockQty,
+      isArchived: products.isArchived,
       quantity,
+      gifts: sql<number>`sum(${deliveryItems.giftQty})::int`,
       total: sql<string>`sum(${deliveryItems.lineTotal})`,
     })
     .from(deliveryItems)
     .innerJoin(deliveries, eq(deliveries.id, deliveryItems.deliveryId))
     .innerJoin(products, eq(products.id, deliveryItems.productId))
-    .where(and(eq(deliveries.storeId, storeId), gte(deliveries.deliveryDate, start)))
+    .where(and(eq(deliveries.storeId, storeId), gte(deliveries.deliveryDate, topPeriodStart(today, period))))
     .groupBy(products.id)
     .having(sql`sum(${deliveryItems.quantity}) > 0`)
     .orderBy(desc(quantity), asc(products.name))
-    .limit(limit);
+    .$dynamic();
+  return limit ? query.limit(limit) : query;
 }

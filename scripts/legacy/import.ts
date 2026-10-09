@@ -92,6 +92,11 @@ try {
           ),
         );
       }
+      // Not in the old app: every store's „გამოტანილები“ supplier (goods taken back from customers,
+      // see createCustomerReturn). Inserted after the sequences moved, so it gets a fresh id.
+      await tx.execute(
+        sql`INSERT INTO app.suppliers (store_id, name, is_customer_returns) SELECT id, 'გამოტანილები', true FROM app.stores`,
+      );
       await tx.insert(s.auditLog).values({
         action: "legacy.import",
         entityType: "system",

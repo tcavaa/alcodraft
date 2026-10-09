@@ -16,7 +16,7 @@ import { StatCard } from "@/components/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { AddEntryDialog, EntryRowMenu, NewAccountButton, RenameAccountButton } from "@/features/finance/components/finance-components";
+import { AddEntryDialog, EntryRowMenu, RenameAccountButton } from "@/features/finance/components/finance-components";
 import { ENTRY_SORTS, listAccounts, listEntries } from "@/features/finance/queries";
 import { formatDate } from "@/lib/dates";
 import { dec, formatAmount, formatQty } from "@/lib/money";
@@ -40,7 +40,7 @@ export default async function FinancePage({ params, searchParams }: PageProps<"/
     return (
       <>
         <PageHeader eyebrow={store.name} title="სალარო" />
-        <EmptyState icon={Wallet} title="სალარო არ არის" action={user.role === "super_admin" ? <NewAccountButton storeId={store.id} /> : undefined} />
+        <EmptyState icon={Wallet} title="სალარო არ არის" />
       </>
     );
   }
@@ -87,10 +87,7 @@ export default async function FinancePage({ params, searchParams }: PageProps<"/
             />
           ) : null}
           {user.role === "super_admin" ? (
-            <>
-              <RenameAccountButton storeId={store.id} accountId={account.id} name={account.name} />
-              <NewAccountButton storeId={store.id} />
-            </>
+            <RenameAccountButton storeId={store.id} accountId={account.id} name={account.name} />
           ) : null}
         </div>
       ) : null}

@@ -539,9 +539,14 @@ async function lockOrder(tx: Tx, actor: Actor, orderId: number) {
 
 export interface OrderEditInput extends DocumentEditInput {
   uploadStatus: UploadStatus | null;
+  /** Set when the discount was changed; the submitted prices are already at the new discount. */
+  discountFactor?: string;
 }
 
-/** Old orders/edit: prices are final per line; the discount is not applied again. */
+/**
+ * Old orders/edit: prices are final per line; the discount is not applied again. New: the
+ * discount can be changed — the form moves the line prices, this records the new factor.
+ */
 export async function updateOrder(tx: Tx, actor: Actor, orderId: number, input: OrderEditInput) {
   const order = await lockOrder(tx, actor, orderId);
   if (order.status !== "open") throw new ActionError("დასრულებული ან გაუქმებული შეკვეთა არ რედაქტირდება.");
@@ -570,6 +575,7 @@ export async function updateOrder(tx: Tx, actor: Actor, orderId: number, input: 
       hasWaybill: input.hasWaybill,
       uploadStatus: input.uploadStatus,
       comment: input.comment,
+      ...(input.discountFactor !== undefined ? { discountFactor: input.discountFactor } : {}),
     })
     .where(eq(orders.id, order.id));
   await audit(tx, {
@@ -580,7 +586,14 @@ export async function updateOrder(tx: Tx, actor: Actor, orderId: number, input: 
     entityId: order.id,
     summary: `შეკვეთა #${order.number} შეიცვალა — ჯამი ${formatAmount(order.totalAmount)} → ${formatAmount(plan.total)} ₾`,
     details: {
-      before: { total: order.totalAmount, paid: order.paidAmount, method: order.paymentMethod, items: stored },
+      before: {
+        total: order.totalAmount,
+        paid: order.paidAmount,
+        method: order.paymentMethod,
+        discountFactor: order.discountFactor,
+        items: stored,
+      },
+      discountFactor: input.discountFactor,
       removedItems: plan.remove.map((r) => r.id),
       addedItems: plan.add.map(itemValues),
     },

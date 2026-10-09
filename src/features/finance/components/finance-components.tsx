@@ -30,7 +30,6 @@ import { storeHref } from "@/lib/routes";
 
 import {
   accrueWageAction,
-  createAccountAction,
   createEntryAction,
   deleteEntryAction,
   payWageAction,
@@ -270,24 +269,6 @@ function AccountNameDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
-  );
-}
-
-export function NewAccountButton({ storeId }: { storeId: number }) {
-  return (
-    <AccountNameDialog
-      trigger={
-        <Button variant="ghost" size="sm">
-          <Plus />
-          ახალი სალარო
-        </Button>
-      }
-      title="ახალი სალარო"
-      description="მაგ.: საბანკო ანგარიში ან მეორე სალარო."
-      initialName=""
-      submitLabel="შექმნა"
-      save={(name) => createAccountAction(storeId, name)}
-    />
   );
 }
 

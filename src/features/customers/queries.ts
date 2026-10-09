@@ -7,18 +7,19 @@ import { db } from "@/server/db";
 import { countByArchived } from "@/server/db/archived";
 import { debtDelta, debtSum, debtSumOrZero, likePattern } from "@/server/db/expressions";
 import { by } from "@/server/db/order";
+import { CUSTOMER_COLORS, type CustomerColor } from "./colors";
 import { customers, deliveries, deliveryItems, orders, products } from "@/server/db/schema";
 
 
-export const CUSTOMER_SORTS = ["color", "name", "comment", "debt", "last"] as const;
+export const CUSTOMER_SORTS = ["color", "id", "name", "comment", "debt", "last"] as const;
 export type CustomerSort = (typeof CUSTOMER_SORTS)[number];
 
 export interface CustomerListParams {
   q?: string;
   archived: boolean;
-  /** null = by name (default). */
+  /** null = by colour, then name (default). */
   sort: SortState<CustomerSort> | null;
-  color?: "green" | "yellow" | "red";
+  color?: CustomerColor;
   page: number;
   pageSize: number;
 }
@@ -55,14 +56,16 @@ export async function listCustomers(storeId: number, p: CustomerListParams) {
   const where = and(...conditions);
   const debt = sql<string>`coalesce(${stats.debt}, 0)`;
 
+  // In CUSTOMER_COLORS order (red → … → white); customers without a colour last.
+  const colorRank = sql`case ${customers.color} ${sql.raw(CUSTOMER_COLORS.map((c, i) => `when '${c}' then ${i}`).join(" "))} end`;
   const s = p.sort;
   const order = !s
-    ? [asc(customers.name), asc(customers.id)]
+    ? [by(colorRank, "asc"), asc(customers.name), asc(customers.id)]
     : [
         by(
           {
-            // red → yellow → green; customers without a colour last
-            color: sql`case ${customers.color} when 'red' then 0 when 'yellow' then 1 when 'green' then 2 end`,
+            color: colorRank,
+            id: customers.id,
             name: customers.name,
             comment: sql`nullif(${customers.comment}, '')`,
             debt,

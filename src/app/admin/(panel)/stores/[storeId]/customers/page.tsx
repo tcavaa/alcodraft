@@ -13,6 +13,7 @@ import { Money } from "@/components/money";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { CUSTOMER_COLOR_LABEL, CUSTOMER_COLORS } from "@/features/customers/colors";
 import { COLOR_ROW, CustomerColorPicker } from "@/features/customers/components/customer-color";
 import { CustomerComment } from "@/features/customers/components/customer-comment";
 import { CustomerRowMenu } from "@/features/customers/components/customer-row-menu";
@@ -34,7 +35,7 @@ export default async function CustomersPage({ params, searchParams }: PageProps<
   const sp = await searchParams;
   const archived = param(sp, "archived") === "1";
   const sort = sortParam(sp, CUSTOMER_SORTS);
-  const color = enumParam(sp, "color", ["green", "yellow", "red"] as const);
+  const color = enumParam(sp, "color", CUSTOMER_COLORS);
   const page = pageParam(sp);
   const q = param(sp, "q");
 
@@ -72,9 +73,7 @@ export default async function CustomersPage({ params, searchParams }: PageProps<
           className="w-40"
           options={[
             { value: "all", label: "ყველა" },
-            { value: "red", label: "წითელი" },
-            { value: "yellow", label: "ყვითელი" },
-            { value: "green", label: "მწვანე" },
+            ...CUSTOMER_COLORS.map((c) => ({ value: c, label: CUSTOMER_COLOR_LABEL[c] })),
           ]}
         />
       </div>
@@ -92,6 +91,9 @@ export default async function CustomersPage({ params, searchParams }: PageProps<
               <HeadRow>
                 <SortableHead column="color" first="asc" className="w-14 pr-0">
                   <Palette className="size-3.5" aria-label="ფერი" />
+                </SortableHead>
+                <SortableHead column="id" className="w-16">
+                  ID
                 </SortableHead>
                 <SortableHead column="name">დასახელება</SortableHead>
                 <SortableHead column="comment" className="hidden lg:table-cell">
@@ -112,6 +114,7 @@ export default async function CustomersPage({ params, searchParams }: PageProps<
                   <TableCell className="pr-0">
                     <CustomerColorPicker storeId={store.id} customerId={c.id} color={c.color} />
                   </TableCell>
+                  <TableCell className="text-muted-foreground tabular-nums">{c.id}</TableCell>
                   <TableCell>
                     <div className="max-w-[22rem]">
                       <Link href={storeHref(store.id, `customers/${c.id}`)} className="block truncate font-medium hover:underline" title={c.name}>
@@ -145,7 +148,7 @@ export default async function CustomersPage({ params, searchParams }: PageProps<
             </TableBody>
             <TableFooter>
               <TableRow className="hover:bg-transparent">
-                <TableCell />
+                <TableCell colSpan={2} />
                 <TableCell colSpan={2} className="text-muted-foreground">
                   სულ {formatQty(list.total)} კლიენტი
                   {!dec(list.credit).isZero() ? (

@@ -70,7 +70,10 @@ export function useDocumentLines(products: ProductOption[], initial: (p: Product
   const lineOf = (p: ProductOption): LineState => lines[p.id] ?? initial(p);
   const setField = (product: ProductOption, field: LineField, value: string) =>
     setLines((prev) => ({ ...prev, [product.id]: { ...(prev[product.id] ?? initial(product)), [field]: value } }));
-  return { lineOf, setField };
+  /** Changes every line at once (e.g. all prices when an open order's discount changes). */
+  const mapLines = (fn: (line: LineState) => LineState) =>
+    setLines((prev) => Object.fromEntries(products.map((p) => [p.id, fn(prev[p.id] ?? initial(p))])));
+  return { lineOf, setField, mapLines };
 }
 
 export function LinesEditor({

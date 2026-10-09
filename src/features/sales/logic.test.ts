@@ -10,6 +10,7 @@ import {
   leftoverValue,
   paymentHitsCashBook,
   planLineEdit,
+  rediscountPrice,
   type StoredLine,
   stockDeltas,
   totalOf,
@@ -50,6 +51,21 @@ describe("computeFinalLines (old orders/edit: price is already final)", () => {
   it("does not apply a discount again", () => {
     const [line] = computeFinalLines([{ productId: 1, unitPrice: "14.45", quantity: 2, giftQty: 0, leftoverQty: 0 }]);
     expect(line.lineTotal.toString()).toBe("28.9");
+  });
+});
+
+describe("rediscountPrice (open order: discount changed)", () => {
+  it("moves a final price to the new discount", () => {
+    expect(rediscountPrice("8.5", "0.85", "0.9").toString()).toBe("9");
+    expect(rediscountPrice("10", "1", "0.85").toString()).toBe("8.5");
+    expect(rediscountPrice("2.8305", "0.85", "1").toString()).toBe("3.33");
+  });
+
+  it("comes back to the same price after several switches", () => {
+    let price = rediscountPrice("3.33", "1", "0.7");
+    price = rediscountPrice(price, "0.7", "0.6");
+    price = rediscountPrice(price, "0.6", "1");
+    expect(price.toString()).toBe("3.33");
   });
 });
 

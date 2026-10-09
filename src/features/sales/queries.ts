@@ -248,7 +248,8 @@ export const ORDER_SORTS = ["date", "customer", "paid", "debt", "total", "commen
 export type OrderSort = (typeof ORDER_SORTS)[number];
 
 export interface OrderListParams {
-  status: "open" | "history";
+  /** history = completed and cancelled together. */
+  status: "open" | "history" | "completed" | "cancelled";
   q?: string;
   customerId?: number;
   sort: SortState<OrderSort> | null;
@@ -272,7 +273,7 @@ export async function listOrders(storeIds: number[], p: OrderListParams) {
   const currentDebt = sql<string>`coalesce(${debts.debt}, 0)`;
   const conditions: (SQL | undefined)[] = [
     inArray(orders.storeId, ids),
-    p.status === "open" ? eq(orders.status, "open") : sql`${orders.status} <> 'open'`,
+    p.status === "history" ? sql`${orders.status} <> 'open'` : eq(orders.status, p.status),
   ];
   if (p.customerId) conditions.push(eq(orders.customerId, p.customerId));
   if (p.q) {

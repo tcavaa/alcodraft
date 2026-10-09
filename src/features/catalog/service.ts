@@ -23,6 +23,7 @@ import {
   suppliers,
 } from "@/server/db/schema";
 
+import { CUSTOMER_COLOR_LABEL, type CustomerColor } from "../customers/colors";
 import type { Actor } from "../sales/service";
 
 // ── Products (old "drinks") ─────────────────────────────────────────────────
@@ -315,19 +316,17 @@ export async function updateCustomer(tx: Tx, actor: Actor, customerId: number, i
   });
 }
 
-const COLOR_LABEL = { green: "მწვანე", yellow: "ყვითელი", red: "წითელი" } as const;
-
 export async function setCustomerNote(
   tx: Tx,
   actor: Actor,
   customerId: number,
-  fields: { comment?: string; color?: "green" | "yellow" | "red" | null },
+  fields: { comment?: string; color?: CustomerColor | null },
 ) {
   const customer = await lockCustomer(tx, actor, customerId);
   const changes: string[] = [];
   if (fields.comment !== undefined && fields.comment !== customer.comment) changes.push("კომენტარი შეიცვალა");
   if (fields.color !== undefined && fields.color !== customer.color) {
-    changes.push(`ფერი: ${fields.color ? COLOR_LABEL[fields.color] : "უფერო"}`);
+    changes.push(`ფერი: ${fields.color ? CUSTOMER_COLOR_LABEL[fields.color] : "უფერო"}`);
   }
   if (changes.length === 0) return;
   await tx.update(customers).set(fields).where(eq(customers.id, customerId));

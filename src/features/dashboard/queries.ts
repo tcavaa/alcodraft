@@ -4,7 +4,7 @@ import { and, asc, count, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 
 import { db } from "@/server/db";
 import { cashSumOrZero, debtSum } from "@/server/db/expressions";
-import { customers, deliveries, financeAccounts, financeEntries, orders, products } from "@/server/db/schema";
+import { customers, deliveries, deliveryItems, financeAccounts, financeEntries, orders, products } from "@/server/db/schema";
 
 /** Σ(total − paid + correction) — a customer's debt, the old `darchenili`. */
 
@@ -152,5 +152,27 @@ export async function getOutOfStock(storeId: number, limit = 8) {
     .from(products)
     .where(and(eq(products.storeId, storeId), eq(products.isArchived, false), lte(products.stockQty, 0)))
     .orderBy(asc(products.stockQty), asc(products.name))
+    .limit(limit);
+}
+
+/** Best sellers by units delivered over the last `days` days (today included); gifts not counted. */
+export async function getTopProducts(storeId: number, today: string, days = 30, limit = 8) {
+  const [y, m, d] = today.split("-").map(Number);
+  const start = new Date(Date.UTC(y, m - 1, d - (days - 1))).toISOString().slice(0, 10);
+  const quantity = sql<number>`sum(${deliveryItems.quantity})::int`;
+  return db
+    .select({
+      id: products.id,
+      name: products.name,
+      quantity,
+      total: sql<string>`sum(${deliveryItems.lineTotal})`,
+    })
+    .from(deliveryItems)
+    .innerJoin(deliveries, eq(deliveries.id, deliveryItems.deliveryId))
+    .innerJoin(products, eq(products.id, deliveryItems.productId))
+    .where(and(eq(deliveries.storeId, storeId), gte(deliveries.deliveryDate, start)))
+    .groupBy(products.id)
+    .having(sql`sum(${deliveryItems.quantity}) > 0`)
+    .orderBy(desc(quantity), asc(products.name))
     .limit(limit);
 }

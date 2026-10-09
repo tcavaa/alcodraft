@@ -23,7 +23,8 @@ export const orderStatus = app.enum("order_status", ["open", "completed", "cance
 /** `adjustment` = a manual debt correction with no products. */
 export const deliveryKind = app.enum("delivery_kind", ["delivery", "adjustment"]);
 
-export const customerColor = app.enum("customer_color", ["green", "yellow", "red"]);
+/** New values are appended (Postgres can add enum values but not reorder them); display order is in `CUSTOMER_COLORS`. */
+export const customerColor = app.enum("customer_color", ["green", "yellow", "red", "blue", "black", "white"]);
 
 export const financeEntryKind = app.enum("finance_entry_kind", [
   "manual",

@@ -138,7 +138,11 @@ export async function createOrderAction(storeId: number, payload: OrderPayload) 
   });
 }
 
-const orderEditSchema = documentEditSchema.extend({ uploadStatus: uploadStatus.nullable() });
+/** `discountFactor` only when the user changed it (the line prices already carry it). */
+const orderEditSchema = documentEditSchema.extend({
+  uploadStatus: uploadStatus.nullable(),
+  discountFactor: z.enum(factors).optional(),
+});
 export type OrderEditPayload = z.input<typeof orderEditSchema>;
 
 export async function updateOrderAction(storeId: number, orderId: number, payload: OrderEditPayload) {

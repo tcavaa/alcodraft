@@ -10,6 +10,8 @@ import { type ActionResult, parseInput, runAction } from "@/server/action";
 import { authorizeStore } from "@/server/auth/dal";
 import { db } from "@/server/db";
 
+import { CUSTOMER_COLORS } from "./colors";
+
 import {
   createCustomer,
   deleteCustomer,
@@ -61,7 +63,7 @@ export async function setCustomerCommentAction(storeId: number, customerId: numb
 export async function setCustomerColorAction(storeId: number, customerId: number, color: string | null) {
   return runAction(async () => {
     const { actor } = await authorizeStore(storeId);
-    const value = parseInput(z.enum(["green", "yellow", "red"]).nullable(), color);
+    const value = parseInput(z.enum(CUSTOMER_COLORS).nullable(), color);
     await db.transaction((tx) => setCustomerNote(tx, actor, customerId, { color: value }));
     refresh();
   });

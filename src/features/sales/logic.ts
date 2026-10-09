@@ -73,6 +73,15 @@ export function computeLines(lines: LineInput[], discountFactor: Numeric = 1): C
     });
 }
 
+/**
+ * A final unit price moved from one discount to another (open order edit): 8.50 at 15% off becomes
+ * 9.00 at 10% off. Keeps a price the user typed by hand in proportion; prices of whole tetri
+ * survive any number of switches exactly.
+ */
+export function rediscountPrice(unitPrice: Numeric, fromFactor: Numeric, toFactor: Numeric): Decimal {
+  return dec(unitPrice).div(dec(fromFactor)).times(dec(toFactor)).toDecimalPlaces(4);
+}
+
 /** Lines whose unit price is already final (order edit / completion: no discount re-applied). */
 export function computeFinalLines(
   lines: { productId: number; unitPrice: Numeric; quantity: number; giftQty: number; leftoverQty: number }[],

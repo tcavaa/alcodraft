@@ -7,6 +7,7 @@ import {
   PackageX,
   Plus,
   ReceiptText,
+  Trophy,
   Wallet,
 } from "lucide-react";
 import type { Metadata } from "next";
@@ -26,10 +27,12 @@ import {
   getRecentDeliveries,
   getStoreKpis,
   getTopDebtors,
+  getTopProducts,
 } from "@/features/dashboard/queries";
 import { OPERATION_KIND_LABEL, operationKind } from "@/features/sales/labels";
 import { formatDate, formatMonth, todayIso } from "@/lib/dates";
 import { formatQty } from "@/lib/money";
+import { cn } from "@/lib/utils";
 import { requireStore } from "@/server/auth/dal";
 
 export const metadata: Metadata = { title: "დაფა" };
@@ -38,12 +41,13 @@ export default async function StoreDashboardPage({ params }: PageProps<"/admin/s
   const { storeId } = await params;
   const { store } = await requireStore(storeId);
   const today = todayIso();
-  const [kpisMap, monthly, recent, debtors, outOfStock] = await Promise.all([
+  const [kpisMap, monthly, recent, debtors, outOfStock, topProducts] = await Promise.all([
     getStoreKpis([store.id], today),
     getMonthlySales(store.id, today),
     getRecentDeliveries(store.id),
     getTopDebtors(store.id),
     getOutOfStock(store.id),
+    getTopProducts(store.id, today),
   ]);
   const kpis = kpisMap.get(store.id)!;
   const href = (segment: string) => storeHref(store.id, segment);
@@ -127,62 +131,99 @@ export default async function StoreDashboardPage({ params }: PageProps<"/admin/s
           </CardContent>
         </Card>
 
-        <div className="grid gap-6">
-          <Card>
-            <CardHeader className="flex-row items-center justify-between">
-              <div>
-                <CardTitle>ყველაზე დიდი ვალი</CardTitle>
-                <CardDescription>აქტიური კლიენტები</CardDescription>
-              </div>
-              <Button variant="ghost" size="sm" asChild>
-                <Link href={`${href("customers")}?sort=-debt`}>
-                  ყველა <ArrowRight />
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Trophy className="size-4 text-gold-strong" />
+              ყველაზე გაყიდვადი პროდუქცია
+            </CardTitle>
+            <CardDescription>ბოლო 30 დღე — შეტანილი რაოდენობით</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-1">
+            {topProducts.length === 0 ? (
+              <p className="text-sm text-muted-foreground">ბოლო 30 დღეში გაყიდვა არ ყოფილა.</p>
+            ) : (
+              topProducts.map((p, i) => (
+                <Link
+                  key={p.id}
+                  href={href(`products/${p.id}`)}
+                  className="flex items-center gap-3 rounded-lg px-2 py-1.5 text-sm hover:bg-muted"
+                >
+                  <span
+                    className={cn(
+                      "flex size-5 shrink-0 items-center justify-center rounded-full text-[0.7rem] font-semibold tabular-nums",
+                      i < 3 ? "bg-gold/20 text-gold-strong" : "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {i + 1}
+                  </span>
+                  <span className="min-w-0 flex-1 truncate">{p.name}</span>
+                  <span className="shrink-0 text-right tabular-nums">
+                    <span className="font-medium">{formatQty(p.quantity)} ც.</span>
+                    <Money value={p.total} currency className="ml-2 hidden text-xs text-muted-foreground sm:inline" />
+                  </span>
                 </Link>
-              </Button>
-            </CardHeader>
-            <CardContent className="space-y-1">
-              {debtors.length === 0 ? (
-                <p className="text-sm text-muted-foreground">ვალიანი კლიენტი არ არის.</p>
-              ) : (
-                debtors.map((c) => (
-                  <Link
-                    key={c.id}
-                    href={href(`customers/${c.id}`)}
-                    className="flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-sm hover:bg-muted"
-                  >
-                    <span className="truncate">{c.name}</span>
-                    <Money value={c.debt} tone="debt" className="font-medium" />
-                  </Link>
-                ))
-              )}
-            </CardContent>
-          </Card>
+              ))
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <PackageX className="size-4 text-destructive" />
-                მარაგი ამოწურულია
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-1">
-              {outOfStock.length === 0 ? (
-                <p className="text-sm text-muted-foreground">ყველა პროდუქტი მარაგშია.</p>
-              ) : (
-                outOfStock.map((p) => (
-                  <Link
-                    key={p.id}
-                    href={href(`products/${p.id}`)}
-                    className="flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-sm hover:bg-muted"
-                  >
-                    <span className="truncate">{p.name}</span>
-                    <span className="tabular-nums text-destructive">{formatQty(p.stock)}</span>
-                  </Link>
-                ))
-              )}
-            </CardContent>
-          </Card>
-        </div>
+      <div className="mt-6 grid gap-6 md:grid-cols-2">
+        <Card>
+          <CardHeader className="flex-row items-center justify-between">
+            <div>
+              <CardTitle>ყველაზე დიდი ვალი</CardTitle>
+              <CardDescription>აქტიური კლიენტები</CardDescription>
+            </div>
+            <Button variant="ghost" size="sm" asChild>
+              <Link href={`${href("customers")}?sort=-debt`}>
+                ყველა <ArrowRight />
+              </Link>
+            </Button>
+          </CardHeader>
+          <CardContent className="space-y-1">
+            {debtors.length === 0 ? (
+              <p className="text-sm text-muted-foreground">ვალიანი კლიენტი არ არის.</p>
+            ) : (
+              debtors.map((c) => (
+                <Link
+                  key={c.id}
+                  href={href(`customers/${c.id}`)}
+                  className="flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-sm hover:bg-muted"
+                >
+                  <span className="truncate">{c.name}</span>
+                  <Money value={c.debt} tone="debt" className="font-medium" />
+                </Link>
+              ))
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <PackageX className="size-4 text-destructive" />
+              მარაგი ამოწურულია
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-1">
+            {outOfStock.length === 0 ? (
+              <p className="text-sm text-muted-foreground">ყველა პროდუქტი მარაგშია.</p>
+            ) : (
+              outOfStock.map((p) => (
+                <Link
+                  key={p.id}
+                  href={href(`products/${p.id}`)}
+                  className="flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-sm hover:bg-muted"
+                >
+                  <span className="truncate">{p.name}</span>
+                  <span className="tabular-nums text-destructive">{formatQty(p.stock)}</span>
+                </Link>
+              ))
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       <Card className="mt-6">

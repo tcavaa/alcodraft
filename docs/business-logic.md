@@ -63,7 +63,7 @@ debts stale; the old delete referenced a column that no longer existed. Now:
 | Step | Behaviour | Old source |
 |---|---|---|
 | Create | same lines and discount as an operation; **no stock or cash change**; `debt_snapshot` = customer's current debt, or the order total if the customer has no operations yet | `orders/add` |
-| Edit | prices are final per line (discount not re-applied, not changeable); qty, gift, leftover, paid, method, waybill, RS status, comment; untouched products keep their saved rows (as for operations) | `orders/edit` |
+| Edit | prices are final per line (discount not re-applied); qty, gift, leftover, paid, method, waybill, RS status, comment; untouched products keep their saved rows (as for operations). **New:** the discount can be changed — every line price moves to it (price ÷ old factor × new factor, 4 decimals) and the order stores the new factor, which completion copies to the operation | `orders/edit` (discount was fixed there) |
 | Complete „შეკვეთის დასრულება“ | creates an operation with the same lines/values and the order's saved total: stock −= delivered + gift (**no stock check**), cash entry as above, debt formula; order → completed and linked. Changes still unsaved on the order page are saved first, in the same transaction („შენახვა და დასრულება“). An order with money paid but no method (imported) needs a method first | `orders/finish` |
 | Cancel „გაუქმება“ | status cancelled (old status 3) | `orders/disable` |
 | Quick edits | RS status (ასატვირთი/ატვირთული) and comment editable from the lists, any status; the RS status of a completed order is copied to its operation | inline forms in `orders/index`, `ordershistory`, `all` |
@@ -98,8 +98,9 @@ The order form warns (doesn't block) when a quantity exceeds stock — stock may
 - Current debt = sum over all operations (= the old latest `darchenili`).
 - List totals: store 1's old page summed debts including negatives, stores 2–6 counted only positive
   debts. New page shows both: „მისაღები“ (Σ positive) and „ზედმეტად გადახდილი“ (Σ negative).
-- Colour (red/yellow/green row highlight) and a free-text comment. The old form re-stamped
-  `dd-mm-YYYY - ` in front of the comment on every save; now an „თარიღის ჩასმა“ button does it on demand.
+- Colour (row highlight: red, yellow, green — as in the old app — plus new blue, black, white) and a
+  free-text comment. The list's default order is by colour in that order (uncoloured last), then name.
+  The old form re-stamped `dd-mm-YYYY - ` in front of the comment on every save; now an „თარიღის ჩასმა“ button does it on demand.
 - „ყველა დღე ერთად“ (old `viewsum`): per product Σ delivered, Σ leftover, delivered − leftover, Σ gift,
   Σ line totals, average price = Σ line totals ÷ Σ delivered; products with Σ delivered > 0 only.
   (Old page also counted item rows of deleted operations and of operations later moved to another

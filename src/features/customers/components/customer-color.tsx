@@ -14,22 +14,26 @@ import {
 import { cn } from "@/lib/utils";
 
 import { setCustomerColorAction } from "../actions";
+import { CUSTOMER_COLOR_LABEL, CUSTOMER_COLORS, type CustomerColor } from "../colors";
 
-export type CustomerColor = "green" | "yellow" | "red" | null;
-
-const COLOR_DOT: Record<"green" | "yellow" | "red", string> = {
-  green: "bg-emerald-500",
-  yellow: "bg-amber-400",
-  red: "bg-rose-500",
+const COLOR_DOT: Record<CustomerColor, string> = {
+  red: "bg-rose-500 border-transparent",
+  yellow: "bg-amber-400 border-transparent",
+  green: "bg-emerald-500 border-transparent",
+  blue: "bg-blue-500 border-transparent",
+  black: "bg-neutral-900 border-neutral-900 dark:border-neutral-400",
+  white: "bg-white border-neutral-400",
 };
 
-export const COLOR_ROW: Record<"green" | "yellow" | "red", string> = {
-  green: "bg-emerald-500/[0.06] hover:bg-emerald-500/10",
-  yellow: "bg-amber-400/[0.09] hover:bg-amber-400/15",
+// White has no row tint: on a white card it would be invisible anyway, the dot marks it.
+export const COLOR_ROW: Record<CustomerColor, string> = {
   red: "bg-rose-500/[0.07] hover:bg-rose-500/12",
+  yellow: "bg-amber-400/[0.09] hover:bg-amber-400/15",
+  green: "bg-emerald-500/[0.06] hover:bg-emerald-500/10",
+  blue: "bg-blue-500/[0.06] hover:bg-blue-500/10",
+  black: "bg-neutral-900/[0.06] hover:bg-neutral-900/10 dark:bg-white/[0.05] dark:hover:bg-white/10",
+  white: "",
 };
-
-const LABELS = { none: "უფერო", green: "მწვანე", yellow: "ყვითელი", red: "წითელი" } as const;
 
 /** Old company/index colour select (row highlight), now a one-click menu. */
 export function CustomerColorPicker({
@@ -39,7 +43,7 @@ export function CustomerColorPicker({
 }: {
   storeId: number;
   customerId: number;
-  color: CustomerColor;
+  color: CustomerColor | null;
 }) {
   const [optimistic, setOptimistic] = useOptimistic(color);
   const [, startTransition] = useTransition();
@@ -61,19 +65,19 @@ export function CustomerColorPicker({
         <span
           className={cn(
             "size-3 rounded-full border",
-            optimistic ? `${COLOR_DOT[optimistic]} border-transparent` : "border-muted-foreground/40 border-dashed",
+            optimistic ? COLOR_DOT[optimistic] : "border-muted-foreground/40 border-dashed",
           )}
         />
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" className="w-40">
         <DropdownMenuLabel className="text-xs text-muted-foreground">ფერი</DropdownMenuLabel>
         <DropdownMenuRadioGroup value={optimistic ?? "none"} onValueChange={change}>
-          {(["none", "green", "yellow", "red"] as const).map((c) => (
+          {(["none", ...CUSTOMER_COLORS] as const).map((c) => (
             <DropdownMenuRadioItem key={c} value={c} className="gap-2">
               <span
-                className={cn("size-2.5 rounded-full", c === "none" ? "border border-dashed border-muted-foreground/50" : COLOR_DOT[c])}
+                className={cn("size-2.5 rounded-full border", c === "none" ? "border-dashed border-muted-foreground/50" : COLOR_DOT[c])}
               />
-              {LABELS[c]}
+              {c === "none" ? "უფერო" : CUSTOMER_COLOR_LABEL[c]}
             </DropdownMenuRadioItem>
           ))}
         </DropdownMenuRadioGroup>

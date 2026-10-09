@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, count, eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { todayIso } from "@/lib/dates";
 import { type Decimal, dec, formatAmount, toDb } from "@/lib/money";
@@ -137,26 +137,6 @@ export async function deleteEntry(tx: Tx, actor: Actor, entryId: number, expecte
 }
 
 // ── Cash books (accounts) ───────────────────────────────────────────────────
-
-export async function createAccount(tx: Tx, actor: Actor, name: string) {
-  const [{ n }] = await tx
-    .select({ n: count() })
-    .from(financeAccounts)
-    .where(eq(financeAccounts.storeId, actor.storeId));
-  const [row] = await tx
-    .insert(financeAccounts)
-    .values({ storeId: actor.storeId, name, isDefault: n === 0, sortOrder: n })
-    .returning({ id: financeAccounts.id });
-  await audit(tx, {
-    storeId: actor.storeId,
-    userId: actor.userId,
-    action: "finance.account_create",
-    entityType: "finance_account",
-    entityId: row.id,
-    summary: `ახალი სალარო: ${name}`,
-  });
-  return row;
-}
 
 export async function renameAccount(tx: Tx, actor: Actor, accountId: number, name: string) {
   const account = await requireAccount(tx, actor, accountId);

@@ -13,7 +13,6 @@ import { once } from "@/server/db/once";
 
 import {
   accrueWage,
-  createAccount,
   createEmployee,
   createEntry,
   deleteEntry,
@@ -67,15 +66,6 @@ export async function deleteEntryAction(storeId: number, entryId: number, expect
 }
 
 const accountName = requiredText("დასახელება", 100);
-
-export async function createAccountAction(storeId: number, name: string) {
-  return runAction(async () => {
-    const { actor } = await authorizeStore(storeId, { superAdminOnly: true });
-    const value = parseInput(accountName, name);
-    const row = await db.transaction((tx) => createAccount(tx, actor, value));
-    redirect(`${storeHref(storeId, "finance")}?account=${row.id}`);
-  });
-}
 
 export async function renameAccountAction(storeId: number, accountId: number, name: string) {
   return runAction(async () => {

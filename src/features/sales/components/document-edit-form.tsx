@@ -9,7 +9,7 @@ import { Money } from "@/components/money";
 import { Button } from "@/components/ui/button";
 import { useServerAction } from "@/hooks/use-server-action";
 import { parseQty } from "@/lib/grid-nav";
-import { type Decimal, dec, formatAmount, parseAmount } from "@/lib/money";
+import { type Decimal, dec, formatAmount, formatDiscount, parseAmount } from "@/lib/money";
 
 import { cancelOrderAction, completeOrderAction, updateDeliveryAction, updateOrderAction } from "../actions";
 import {
@@ -20,6 +20,7 @@ import {
   paymentLabel,
   planLineEdit,
   type StoredLine,
+  rediscountPrice,
   totalOf,
 } from "../logic";
 import type { ProductOption } from "../queries";
@@ -30,7 +31,8 @@ type Confirming = "save" | "complete" | "cancel" | null;
 
 /**
  * Edit an operation or an open order. Prices are final per line (old orders/edit); products that
- * are not on the document yet can be added with the document's discount. Products the user
+ * are not on the document yet can be added with the document's discount. An open order's discount
+ * can be changed: every line's price moves to the new discount (`rediscountPrice`). Products the user
  * doesn't touch keep their saved rows (see `planLineEdit`), so the total shown here is exactly
  * what will be saved. An open order is also completed or cancelled from here, so completion
  * always uses what is on the screen.
@@ -73,15 +75,6 @@ export function DocumentEditForm({
   // numeric(6,4) comes back as "0.8500"; normalise so it matches the discount options ("0.85").
   const factor = discountFactor ? dec(discountFactor).toString() : "1";
   const views = groupStoredLines(storedLines);
-  const initialLine = (p: ProductOption): LineState => {
-    const v = views.get(p.id);
-    if (!v) return { price: dec(p.salePrice).times(factor).toDecimalPlaces(4).toString(), quantity: "", giftQty: "", leftoverQty: "" };
-    const qty = (n: number) => (n ? String(n) : "");
-    return { price: v.unitPrice.toString(), quantity: qty(v.quantity), giftQty: qty(v.giftQty), leftoverQty: qty(v.leftoverQty) };
-  };
-  const { lineOf, setField } = useDocumentLines(products, initialLine);
-  // Products already on the document first (old edit listed them by quantity), then the rest.
-  const ordered = [...products].sort((a, b) => Number(views.has(b.id)) - Number(views.has(a.id)));
 
   const initialSummary: SummaryValues = {
     discountFactor: factor,
@@ -92,6 +85,33 @@ export function DocumentEditForm({
     comment: initial.comment,
   };
   const [summary, setSummary] = useState<SummaryValues>(initialSummary);
+  const discountEditable = kind === "order" && !dec(factor).isZero();
+
+  const initialLine = (p: ProductOption): LineState => {
+    const v = views.get(p.id);
+    if (!v) {
+      const price = dec(p.salePrice).times(summary.discountFactor).toDecimalPlaces(4).toString();
+      return { price, quantity: "", giftQty: "", leftoverQty: "" };
+    }
+    const qty = (n: number) => (n ? String(n) : "");
+    return { price: v.unitPrice.toString(), quantity: qty(v.quantity), giftQty: qty(v.giftQty), leftoverQty: qty(v.leftoverQty) };
+  };
+  const { lineOf, setField, mapLines } = useDocumentLines(products, initialLine);
+  // Products already on the document first (old edit listed them by quantity), then the rest.
+  const ordered = [...products].sort((a, b) => Number(views.has(b.id)) - Number(views.has(a.id)));
+
+  const changeSummary = (patch: Partial<SummaryValues>) => {
+    const from = summary.discountFactor;
+    const to = patch.discountFactor;
+    if (to !== undefined && to !== from) {
+      // A price that isn't a number yet stays as typed; validation points at it.
+      mapLines((l) => {
+        const price = parseAmount(l.price);
+        return price ? { ...l, price: rediscountPrice(price, from, to).toString() } : l;
+      });
+    }
+    setSummary((s) => ({ ...s, ...patch }));
+  };
   const [confirming, setConfirming] = useState<Confirming>(null);
   const { run, pending, errors, setErrors } = useServerAction();
 
@@ -124,7 +144,8 @@ export function DocumentEditForm({
     summary.method !== initialSummary.method ||
     summary.hasWaybill !== initialSummary.hasWaybill ||
     (kind === "order" && summary.uploadStatus !== initialSummary.uploadStatus) ||
-    summary.comment !== initialSummary.comment;
+    summary.comment !== initialSummary.comment ||
+    summary.discountFactor !== initialSummary.discountFactor;
 
   useEffect(() => {
     if (!dirty || pending) return;
@@ -171,12 +192,19 @@ export function DocumentEditForm({
     comment: summary.comment,
   });
 
+  // Only a changed discount is sent: imported orders can carry a factor that isn't one of the options.
+  const orderPayload = () => ({
+    ...payload(),
+    uploadStatus: summary.uploadStatus,
+    ...(summary.discountFactor !== initialSummary.discountFactor ? { discountFactor: summary.discountFactor } : {}),
+  });
+
   const save = () =>
     run(
       () =>
         kind === "delivery"
           ? updateDeliveryAction(storeId, documentId, payload())
-          : updateOrderAction(storeId, documentId, { ...payload(), uploadStatus: summary.uploadStatus }),
+          : updateOrderAction(storeId, documentId, orderPayload()),
       { onSuccess: () => setConfirming(null), onError: () => setConfirming(null) },
     );
 
@@ -191,7 +219,7 @@ export function DocumentEditForm({
   const complete = () =>
     run(
       () =>
-        completeOrderAction(storeId, documentId, dirty ? { ...payload(), uploadStatus: summary.uploadStatus } : null),
+        completeOrderAction(storeId, documentId, dirty ? orderPayload() : null),
       { onError: () => setConfirming(null) },
     );
   const cancel = () => run(() => cancelOrderAction(storeId, documentId), { onSuccess: () => setConfirming(null) });
@@ -201,7 +229,16 @@ export function DocumentEditForm({
   for (const l of resulting) taking.set(l.productId, (taking.get(l.productId) ?? 0) + l.quantity + l.giftQty);
   const shortStock = ordered.filter((p) => (taking.get(p.id) ?? 0) > p.stockQty).map((p) => p.name);
 
+  const discountLabel = (f: string) => formatDiscount(f) || "არა";
   const figures = [
+    ...(summary.discountFactor !== initialSummary.discountFactor
+      ? [
+          {
+            label: "ფასდაკლება",
+            value: `${discountLabel(initialSummary.discountFactor)} → ${discountLabel(summary.discountFactor)}`,
+          },
+        ]
+      : []),
     {
       label: "სულ ჯამში",
       value: total.equals(dec(storedTotal)) ? (
@@ -241,7 +278,7 @@ export function DocumentEditForm({
           lineOf={lineOf}
           onChange={setField}
           mode="final"
-          discountFactor={factor}
+          discountFactor={summary.discountFactor}
           stockMode={kind === "order" ? "warn" : "off"}
           savedTotals={savedTotals}
         />
@@ -249,7 +286,7 @@ export function DocumentEditForm({
       <div className="xl:sticky xl:top-20">
         <SummaryPanel
           values={summary}
-          onChange={(patch) => setSummary((s) => ({ ...s, ...patch }))}
+          onChange={changeSummary}
           total={total}
           lineCount={new Set(resulting.map((l) => l.productId)).size}
           quantity={resulting.reduce((a, l) => a + l.quantity, 0)}
@@ -257,7 +294,7 @@ export function DocumentEditForm({
           leftoverValue={leftoverValue(resulting)}
           previousDebt={previousDebt}
           adjustment={adjustment}
-          discountEditable={false}
+          discountEditable={discountEditable}
           showUploadStatus={kind === "order"}
           submitLabel="ცვლილებების შენახვა"
           onSubmit={() => {

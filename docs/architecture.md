@@ -102,7 +102,8 @@ form submit ──► Server Action (features/x/actions.ts)
 - `requireStore()` → 404 for stores you can't open (no information leak);
   `authorizeStore(storeId, { superAdminOnly })` → `ActionError` inside actions.
 - Super-admin-only actions: delete operation / receipt / cash entry, hard-delete customer /
-  product / supplier, create/rename cash books, everything under Settings.
+  product / supplier, rename a cash book, everything under Settings. (Cash books can't be created
+  from the UI: every store gets one on creation; stores 1–2 keep their imported second book.)
 
 ## Database access
 

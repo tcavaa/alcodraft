@@ -178,33 +178,12 @@ function Sidebar({
     )
   }
 
-  if (isMobile) {
-    return (
-      <Sheet open={openMobile} onOpenChange={setOpenMobile} {...props}>
-        <SheetContent
-          dir={dir}
-          data-sidebar="sidebar"
-          data-slot="sidebar"
-          data-mobile="true"
-          className="w-(--sidebar-width) bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
-          style={
-            {
-              "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
-            } as React.CSSProperties
-          }
-          side={side}
-        >
-          <SheetHeader className="sr-only">
-            <SheetTitle>Sidebar</SheetTitle>
-            <SheetDescription>Displays the mobile sidebar.</SheetDescription>
-          </SheetHeader>
-          <div className="flex h-full w-full flex-col">{children}</div>
-        </SheetContent>
-      </Sheet>
-    )
-  }
-
-  return (
+  // The desktop sidebar is always rendered (CSS hides it below md) and the phone Sheet is added
+  // next to it, instead of switching between the two. The sidebar content hydrates in its own
+  // <Suspense> boundary, possibly after `isMobile` already turned true; a switch would then make
+  // the client render a Sheet where the server sent the desktop markup (hydration mismatch). A
+  // closed Sheet renders nothing, so both cases produce the same HTML.
+  const desktop = (
     <div
       className="group peer hidden text-sidebar-foreground md:block"
       data-state={state}
@@ -247,6 +226,35 @@ function Sidebar({
         </div>
       </div>
     </div>
+  )
+
+  return (
+    <>
+      {desktop}
+      {isMobile ? (
+        <Sheet open={openMobile} onOpenChange={setOpenMobile} {...props}>
+          <SheetContent
+            dir={dir}
+            data-sidebar="sidebar"
+            data-slot="sidebar"
+            data-mobile="true"
+            className="w-(--sidebar-width) bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
+            style={
+              {
+                "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
+              } as React.CSSProperties
+            }
+            side={side}
+          >
+            <SheetHeader className="sr-only">
+              <SheetTitle>Sidebar</SheetTitle>
+              <SheetDescription>Displays the mobile sidebar.</SheetDescription>
+            </SheetHeader>
+            <div className="flex h-full w-full flex-col">{children}</div>
+          </SheetContent>
+        </Sheet>
+      ) : null}
+    </>
   )
 }
 

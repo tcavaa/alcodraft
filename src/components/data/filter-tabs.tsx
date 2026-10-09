@@ -18,14 +18,15 @@ export function FilterTabs({
   value: string;
 }) {
   return (
-    <div className="inline-flex h-9 items-center rounded-lg border bg-muted/60 p-0.5 text-sm">
+    // On a phone the tabs scroll sideways instead of wrapping their labels.
+    <div className="inline-flex h-9 max-w-full items-center overflow-x-auto rounded-lg border bg-muted/60 p-0.5 text-sm">
       {options.map((o, i) => (
         <Link
           key={o.value}
           href={hrefWith(pathname, searchParams, { [param]: i === 0 ? null : o.value, page: null })}
           scroll={false}
           className={cn(
-            "flex h-full items-center gap-1.5 rounded-md px-3 text-muted-foreground transition-colors hover:text-foreground",
+            "flex h-full shrink-0 items-center gap-1.5 rounded-md px-3 whitespace-nowrap text-muted-foreground transition-colors hover:text-foreground",
             o.value === value && "bg-card font-medium text-foreground shadow-xs",
           )}
         >

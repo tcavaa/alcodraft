@@ -1,3 +1,4 @@
+import { CommentLine } from "@/components/data/comment-line";
 import { SortableHead } from "@/components/data/sortable-head";
 import { Money } from "@/components/money";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -78,7 +79,10 @@ export function HistoryCard({
             <TableBody>
               {rows.map((r) => (
                 <TableRow key={r.id}>
-                  <TableCell className="pl-6">{r.dateCell ?? formatDate(r.date)}</TableCell>
+                  <TableCell className="pl-6">
+                    {r.dateCell ?? formatDate(r.date)}
+                    {narrow ? <CommentLine comment={r.comment} className="sm:hidden xl:block 2xl:hidden" /> : null}
+                  </TableCell>
                   <TableCell className="text-right">
                     <Money value={r.amount} />
                   </TableCell>

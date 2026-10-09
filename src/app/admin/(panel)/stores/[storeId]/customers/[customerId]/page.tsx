@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { CommentLine } from "@/components/data/comment-line";
 import { DocumentLinesTable, sortLineRows } from "@/components/data/document-lines-table";
 import { FilterTabs } from "@/components/data/filter-tabs";
 import { Pagination } from "@/components/data/pagination";
@@ -15,7 +16,7 @@ import { StatCard } from "@/components/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableFooter, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CustomerColorPicker } from "@/features/customers/components/customer-color";
 import { CustomerComment } from "@/features/customers/components/customer-comment";
 import { CustomerRowMenu } from "@/features/customers/components/customer-row-menu";
@@ -25,6 +26,7 @@ import {
   getCustomer,
   getCustomerProductSummary,
   getCustomerShelf,
+  listCustomerCounts,
   listCustomerDeliveries,
 } from "@/features/customers/queries";
 import { hasNoPayment, OPERATION_KIND_LABEL, operationKind } from "@/features/sales/labels";
@@ -50,7 +52,7 @@ export default async function CustomerPage({
   if (!data) notFound();
   const { customer, stats, openOrders } = data;
   const sp = await searchParams;
-  const tab = enumParam(sp, "tab", ["summary", "leftover"] as const) ?? "operations";
+  const tab = enumParam(sp, "tab", ["summary", "leftover", "counts"] as const) ?? "operations";
   const page = pageParam(sp);
   const pathname = storeHref(store.id, `customers/${customer.id}`);
 
@@ -190,6 +192,7 @@ export default async function CustomerPage({
             { value: "operations", label: "ოპერაციები" },
             { value: "summary", label: "ყველა დღე ერთად" },
             { value: "leftover", label: "ნაშთი" },
+            { value: "counts", label: "განაშთვის ისტორია" },
           ]}
         />
       </div>
@@ -200,8 +203,10 @@ export default async function CustomerPage({
         <OperationsTable storeId={store.id} customerId={customer.id} page={page} pathname={pathname} sp={sp} stats={stats} />
       ) : tab === "summary" ? (
         <ProductSummary customerId={customer.id} sp={sp} />
-      ) : (
+      ) : tab === "leftover" ? (
         <LeftoverSummary storeId={store.id} customerId={customer.id} sp={sp} />
+      ) : (
+        <CountHistory storeId={store.id} customerId={customer.id} sp={sp} />
       )}
     </>
   );
@@ -268,6 +273,7 @@ async function OperationsTable({
                     <Link href={href} className="font-medium hover:underline">
                       {formatDate(op.date)}
                     </Link>
+                    <CommentLine comment={op.comment} className="xl:hidden" />
                   </TableCell>
                   <TableCell className="text-muted-foreground tabular-nums">#{op.number}</TableCell>
                   <TableCell className="hidden md:table-cell">
@@ -427,5 +433,74 @@ async function LeftoverSummary({ storeId, customerId, sp }: { storeId: number; c
         </Table>
       </TableCard>
     </>
+  );
+}
+
+const COUNT_SORTS = ["date", "products", "leftover", "value"] as const;
+
+/** „განაშთვის ისტორია“ (new): every count of the customer; a row opens the count with its lines. */
+async function CountHistory({ storeId, customerId, sp }: { storeId: number; customerId: number; sp: SearchParams }) {
+  const counts = await listCustomerCounts(customerId);
+  if (counts.length === 0) {
+    return <p className="rounded-xl border border-dashed bg-card/50 p-10 text-center text-sm text-muted-foreground">განაშთვა ჯერ არ ჩატარებულა.</p>;
+  }
+  const rows = sortRows(counts, sortParam(sp, COUNT_SORTS, "csort"), {
+    date: (c) => c.id,
+    products: (c) => c.products,
+    leftover: (c) => c.leftover,
+    value: (c) => dec(c.value),
+  });
+  return (
+    <TableCard>
+      <Table>
+        <TableHeader>
+          <HeadRow>
+            <SortableHead column="date" param="csort" first="desc">
+              თარიღი
+            </SortableHead>
+            <SortableHead column="products" param="csort" className="text-right">
+              პროდუქტი
+            </SortableHead>
+            <SortableHead column="leftover" param="csort" className="text-right">
+              ნაშთი
+            </SortableHead>
+            <SortableHead column="value" param="csort" className="text-right">
+              ღირებულება
+            </SortableHead>
+            <TableHead className="hidden md:table-cell">კომენტარი</TableHead>
+            <TableHead className="hidden text-right lg:table-cell">ვინ</TableHead>
+          </HeadRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((c) => (
+            <TableRow key={c.id}>
+              <TableCell>
+                <Link href={storeHref(storeId, `operations/${c.id}`)} className="font-medium hover:underline">
+                  {formatDate(c.date)}
+                </Link>
+                <span className="ml-2 text-xs text-muted-foreground tabular-nums">#{c.number}</span>
+                {c.kind !== "count" ? (
+                  <Badge variant="outline" className="ml-2 align-middle text-[0.7rem]">
+                    ოპერაციაში
+                  </Badge>
+                ) : null}
+                <CommentLine comment={c.comment} className="md:hidden" />
+              </TableCell>
+              <TableCell className="text-right tabular-nums">{formatQty(c.products)}</TableCell>
+              <TableCell className="text-right font-medium tabular-nums">{formatQty(c.leftover)}</TableCell>
+              <TableCell className="text-right">
+                <Money value={c.value} />
+              </TableCell>
+              <TableCell className="hidden text-muted-foreground md:table-cell">
+                <div className="max-w-xs truncate" title={c.comment || undefined}>
+                  {c.comment}
+                </div>
+              </TableCell>
+              <TableCell className="hidden text-right text-muted-foreground lg:table-cell">{c.createdBy ?? "—"}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </TableCard>
   );
 }

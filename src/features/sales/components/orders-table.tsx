@@ -67,7 +67,7 @@ export function OrdersTable({
               კომენტარი
             </SortableHead>
             <SortableHead column="status">სტატუსი</SortableHead>
-            <SortableHead column="waybill" first="desc" className="hidden text-center sm:table-cell">
+            <SortableHead column="waybill" first="desc" className="text-center">
               RS
             </SortableHead>
           </HeadRow>
@@ -93,6 +93,12 @@ export function OrdersTable({
                         {showStore ? <span className="font-medium text-foreground/70">{o.storeName}</span> : null}
                         {showStore && o.customerAddress ? " · " : null}
                         {o.customerAddress}
+                      </div>
+                    ) : null}
+                    {/* The comment column shows from xl; below it the comment sits under the customer. */}
+                    {o.comment ? (
+                      <div className="-mx-1.5 mt-0.5 min-w-48 whitespace-normal xl:hidden">
+                        <OrderCommentCell storeId={o.storeId} orderId={o.id} comment={o.comment} />
                       </div>
                     ) : null}
                     {o.status !== "open" ? (
@@ -122,7 +128,7 @@ export function OrdersTable({
                 <TableCell>
                   <UploadStatusToggle storeId={o.storeId} orderId={o.id} status={o.uploadStatus} />
                 </TableCell>
-                <TableCell className="hidden text-center sm:table-cell">
+                <TableCell className="text-center">
                   {o.hasWaybill === null ? "—" : o.hasWaybill ? <span className="font-medium">კი</span> : <span className="text-muted-foreground">არა</span>}
                 </TableCell>
               </TableRow>
@@ -141,7 +147,7 @@ export function OrdersTable({
             </TableCell>
             <TableCell className="hidden xl:table-cell" />
             <TableCell />
-            <TableCell className="hidden sm:table-cell" />
+            <TableCell />
           </TableRow>
         </TableFooter>
       </Table>

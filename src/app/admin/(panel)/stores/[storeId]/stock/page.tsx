@@ -2,6 +2,7 @@ import { PackageOpen, Plus } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
+import { CommentLine } from "@/components/data/comment-line";
 import { DateRangeFilter } from "@/components/data/date-range-filter";
 import { Pagination } from "@/components/data/pagination";
 import { ParamSelect } from "@/components/data/param-select";
@@ -123,6 +124,7 @@ export default async function StockPage({ params, searchParams }: PageProps<"/ad
                         მაღაზიიდან გამოტანა: {r.customerName}
                       </Link>
                     ) : null}
+                    <CommentLine comment={r.comment} className="lg:hidden" />
                   </TableCell>
                   <TableCell className="hidden text-muted-foreground lg:table-cell">
                     <div className="max-w-[14rem] truncate" title={r.comment || undefined}>{r.comment}</div>

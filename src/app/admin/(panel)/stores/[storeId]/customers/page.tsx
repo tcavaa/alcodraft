@@ -123,6 +123,12 @@ export default async function CustomersPage({ params, searchParams }: PageProps<
                       <div className="truncate text-xs text-muted-foreground">
                         {[c.address, c.phone, c.contactPerson].filter(Boolean).join(" · ") || "—"}
                       </div>
+                      {/* The comment column shows from lg; below it the comment sits under the name. */}
+                      {c.comment ? (
+                        <div className="-mx-1.5 mt-0.5 min-w-52 whitespace-normal lg:hidden">
+                          <CustomerComment storeId={store.id} customerId={c.id} comment={c.comment} />
+                        </div>
+                      ) : null}
                     </div>
                   </TableCell>
                   <TableCell className="hidden w-[34%] lg:table-cell">

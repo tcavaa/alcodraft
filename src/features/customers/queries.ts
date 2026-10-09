@@ -15,6 +15,7 @@ import {
   products,
   stockReceiptItems,
   stockReceipts,
+  users,
 } from "@/server/db/schema";
 
 import { CUSTOMER_COLORS, type CustomerColor } from "./colors";
@@ -324,3 +325,29 @@ export async function getCustomerShelf(customerId: number) {
 }
 
 export type ShelfProduct = Awaited<ReturnType<typeof getCustomerShelf>>["products"][number];
+
+/**
+ * „განაშთვის ისტორია“ (new): every count of the customer, newest first — `count` operations and
+ * older operations that recorded leftovers (the same rule as `getLatestCount`).
+ */
+export async function listCustomerCounts(customerId: number) {
+  return db
+    .select({
+      id: deliveries.id,
+      number: deliveries.number,
+      date: deliveries.deliveryDate,
+      kind: deliveries.kind,
+      comment: deliveries.comment,
+      createdBy: users.name,
+      products: sql<number>`(count(${deliveryItems.id}) filter (where ${deliveryItems.leftoverQty} <> 0))::int`,
+      leftover: sql<number>`coalesce(sum(${deliveryItems.leftoverQty}), 0)::int`,
+      value: sql<string>`coalesce(sum(${deliveryItems.unitPrice} * ${deliveryItems.leftoverQty}), 0)`,
+    })
+    .from(deliveries)
+    .leftJoin(deliveryItems, eq(deliveryItems.deliveryId, deliveries.id))
+    .leftJoin(users, eq(users.id, deliveries.createdById))
+    .where(eq(deliveries.customerId, customerId))
+    .groupBy(deliveries.id, users.name)
+    .having(sql`${deliveries.kind} = 'count' or sum(${deliveryItems.leftoverQty}) filter (where ${deliveryItems.leftoverQty} <> 0) is not null`)
+    .orderBy(desc(deliveries.id));
+}

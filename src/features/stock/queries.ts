@@ -1,13 +1,22 @@
 import "server-only";
 
-import { and, asc, count, desc, eq, gte, ilike, lte, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, ilike, isNull, lte, ne, or, sql, type SQL } from "drizzle-orm";
 
 import type { SortState } from "@/lib/sort";
 import { db } from "@/server/db";
 import { countByArchived } from "@/server/db/archived";
 import { likePattern, supplierPaidSum } from "@/server/db/expressions";
 import { by } from "@/server/db/order";
-import { financeEntries, products, stockReceiptItems, stockReceipts, suppliers, users } from "@/server/db/schema";
+import {
+  customers,
+  deliveries,
+  financeEntries,
+  products,
+  stockReceiptItems,
+  stockReceipts,
+  suppliers,
+  users,
+} from "@/server/db/schema";
 
 const receiptTotalsQuery = () =>
   db
@@ -44,7 +53,14 @@ export async function listReceipts(
   if (p.to) conditions.push(lte(stockReceipts.receiptDate, p.to));
   if (p.q) {
     const like = likePattern(p.q);
-    conditions.push(or(ilike(stockReceipts.comment, like), ilike(suppliers.name, like), sql`${stockReceipts.number}::text = ${p.q}`));
+    conditions.push(
+      or(
+        ilike(stockReceipts.comment, like),
+        ilike(suppliers.name, like),
+        ilike(customers.name, like),
+        sql`${stockReceipts.number}::text = ${p.q}`,
+      ),
+    );
   }
   const where = and(...conditions);
   const s = p.sort;
@@ -74,12 +90,15 @@ export async function listReceipts(
         comment: stockReceipts.comment,
         supplierId: suppliers.id,
         supplierName: suppliers.name,
+        customerId: customers.id,
+        customerName: customers.name,
         lines: receiptTotals.lines,
         quantity: receiptTotals.quantity,
         cost: sql<string>`coalesce(${receiptTotals.cost}, 0)`,
       })
       .from(stockReceipts)
       .leftJoin(suppliers, eq(suppliers.id, stockReceipts.supplierId))
+      .leftJoin(customers, eq(customers.id, stockReceipts.customerId))
       .leftJoin(receiptTotals, eq(receiptTotals.receiptId, stockReceipts.id))
       .where(where)
       .orderBy(...order)
@@ -89,6 +108,7 @@ export async function listReceipts(
       .select({ total: count() })
       .from(stockReceipts)
       .leftJoin(suppliers, eq(suppliers.id, stockReceipts.supplierId))
+      .leftJoin(customers, eq(customers.id, stockReceipts.customerId))
       .where(where),
   ]);
   return { rows, total };
@@ -97,9 +117,17 @@ export async function listReceipts(
 /** Old drinks/history/{id}. */
 export async function getReceipt(storeId: number, receiptId: number) {
   const [row] = await db
-    .select({ receipt: stockReceipts, supplierName: suppliers.name, createdBy: users.name })
+    .select({
+      receipt: stockReceipts,
+      supplierName: suppliers.name,
+      customerName: customers.name,
+      deliveryNumber: deliveries.number,
+      createdBy: users.name,
+    })
     .from(stockReceipts)
     .leftJoin(suppliers, eq(suppliers.id, stockReceipts.supplierId))
+    .leftJoin(customers, eq(customers.id, stockReceipts.customerId))
+    .leftJoin(deliveries, eq(deliveries.id, stockReceipts.deliveryId))
     .leftJoin(users, eq(users.id, stockReceipts.createdById))
     .where(and(eq(stockReceipts.id, receiptId), eq(stockReceipts.storeId, storeId)));
   if (!row) return null;
@@ -155,6 +183,8 @@ const supplierPayableQuery = () =>
   })
   .from(stockReceipts)
   .innerJoin(stockReceiptItems, eq(stockReceiptItems.receiptId, stockReceipts.id))
+  // Goods taken back from customers carry their return price, not a purchase cost: nothing is owed for them.
+  .where(isNull(stockReceipts.customerId))
   .groupBy(stockReceipts.supplierId)
   .as("supplier_payable");
 

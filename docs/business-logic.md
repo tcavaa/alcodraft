@@ -18,7 +18,7 @@ Created from the customer page / „დღის ჩახურვა“ form (
 | Stock | product stock −= delivered + gift („საჩუქარი“) | two loops in `distribution/add` |
 | Stock check | delivered may not exceed stock on hand (gift is not checked) | `<input max=count>` on the form |
 | Cash book | if method ≠ „დაბრუნება“ (`back`) and paid ≠ 0: income = paid into the store's default book, text `"<customer name> <method>"` | `finance_model->add` unless `pay_meth == 'back'` |
-| „ნაშთი“ (leftover) | recorded per line; informational only: „დარჩენილი“ column = delivered − leftover, summary „ნაშთი“ = Σ unit price × leftover | `distribution/view` |
+| „ნაშთი“ (leftover) | recorded per line; informational only: „დარჩენილი“ column = delivered − leftover, summary „ნაშთი“ = Σ unit price × leftover. **New:** the new-operation form has no „ნაშთი“ column — leftovers are recorded with „განაშთვა“ (below); edits and orders keep it | `distribution/view` |
 | Payment only | an operation with no lines and paid > 0 is a customer payment (shown as „გადახდა“) | same form with zero quantities |
 | Price highlight | unit price shown in amber when it differs from the product's current price | red `style` in `distribution/view` |
 
@@ -57,6 +57,14 @@ debts stale; the old delete referenced a column that no longer existed. Now:
 
 „ვალის კორექტირება“ creates an operation of kind `adjustment` (no lines, total 0, paid 0,
 `adjustment_amount` = ±amount, reason required). Replaces editing `darchenili` in phpMyAdmin.
+
+### Counts and returns (new, from the customer page)
+
+| What | Behaviour |
+|---|---|
+| „განაშთვა“ (count) | Lists every product the customer was ever delivered: last price charged, Σ delivered; the user types only what is left on the shelf. Saved as a `count` operation whose lines carry only „ნაშთი“ (quantity, gift, totals 0) — no stock, debt or cash effect; zero counts are not stored. Not editable (delete and count again). The old app did the same with zero-quantity operations, which still count as counts |
+| „ნაშთი“ tab | Per product: average price and Σ delivered (as „ყველა დღე ერთად“) and the leftover of the **latest** count (the newest `count` operation, or older operation with leftovers); products missing from it show 0 |
+| „პროდუქციის გამოტანა“ (return) | Only products the customer was delivered; price starts at the last price charged (editable) and a quantity. Saves a `return` operation with total −Σ price × qty (debt goes down, **no cash entry**) and a linked stock receipt from the store's "returned goods" supplier (stock goes up), commented „მაღაზიიდან გამოტანა — <customer>“; the receipt history shows the customer under the supplier. The receipt carries the return price, so it is left out of the supplier's payable. Deleting the operation (super admin) deletes the receipt and takes the goods back out; the receipt can't be deleted on its own. Inactive products can be returned |
 
 ## Orders — „შეკვეთა“ (old `orders`)
 

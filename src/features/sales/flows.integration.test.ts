@@ -26,12 +26,15 @@ import {
   createProduct,
   createSupplier,
   deleteSupplier,
+  setProductActive,
   setProductArchived,
 } from "../catalog/service";
 import { accrueWage, createEmployee, deleteEntry, paySupplier, payWage, updateEmployee } from "../finance/service";
-import { createReceipt } from "../stock/service";
+import { createReceipt, deleteReceipt } from "../stock/service";
 import {
   completeOrder,
+  createCustomerCount,
+  createCustomerReturn,
   createDebtAdjustment,
   createDelivery,
   createOrder,
@@ -459,6 +462,89 @@ describe.skipIf(!enabled)("money & stock flows (rolled back)", () => {
       // …deleting the correction row itself does.
       await deleteEntry(tx, actor, entry.id, "correction");
       expect(await cash()).toBe(before);
+    });
+  });
+
+  it("counts leftovers, takes goods back from a customer and hides inactive products", async () => {
+    await inRollback(async (tx, { actor, store, stock, cash, debt, delivery }) => {
+      const returns = await createSupplier(tx, actor, { name: "დაბრუნებული", isReturns: true });
+      const p1 = await createProduct(tx, actor, { name: "Wine A", supplierId: null, salePrice: dec(10), purchasePrice: dec(6), comment: "" });
+      const p2 = await createProduct(tx, actor, { name: "Wine B", supplierId: null, salePrice: dec(20), purchasePrice: dec(12), comment: "" });
+      await createReceipt(tx, actor, {
+        supplierId: null,
+        lines: [
+          { productId: p1.id, quantity: 50, unitCost: dec(6) },
+          { productId: p2.id, quantity: 50, unitCost: dec(12) },
+        ],
+        comment: "",
+      });
+      const customer = await createCustomer(tx, actor, { name: "Shop", address: "", taxId: "", phone: "", contactPerson: "" });
+      await createDelivery(tx, actor, {
+        customerId: customer.id,
+        lines: [
+          { productId: p1.id, price: "10", quantity: 12, giftQty: 0, leftoverQty: 0 },
+          { productId: p2.id, price: "20", quantity: 6, giftQty: 0, leftoverQty: 0 },
+        ],
+        discountFactor: "1",
+        paidAmount: dec(0),
+        paymentMethod: "cash",
+        hasWaybill: false,
+        comment: "",
+      });
+      expect(await debt(customer.id)).toBe("240");
+      const cashBefore = await cash();
+
+      // „განაშთვა“: only leftovers — no stock, debt or cash change; zero counts aren't stored.
+      const count = await createCustomerCount(tx, actor, {
+        customerId: customer.id,
+        lines: [
+          { productId: p1.id, unitPrice: dec(10), leftoverQty: 4 },
+          { productId: p2.id, unitPrice: dec(20), leftoverQty: 0 },
+        ],
+        comment: "",
+      });
+      expect((await delivery(count.id)).kind).toBe("count");
+      const countItems = await tx.select().from(s.deliveryItems).where(eq(s.deliveryItems.deliveryId, count.id));
+      expect(countItems.map((i) => [i.productId, i.quantity, i.leftoverQty, i.lineTotal])).toEqual([[p1.id, 0, 4, "0.0000"]]);
+      expect([await stock(p1.id), await stock(p2.id), await debt(customer.id), await cash()]).toEqual([38, 44, "240", cashBefore]);
+      await failsInSavepoint(tx, (inner) =>
+        updateDelivery(inner, actor, count.id, { lines: [], paidAmount: dec(5), paymentMethod: "cash", hasWaybill: null, comment: "" }),
+      );
+
+      // „პროდუქციის გამოტანა“: debt −Σ price × qty, stock back up, cash untouched, receipt linked.
+      const ret = await createCustomerReturn(tx, actor, {
+        customerId: customer.id,
+        lines: [
+          { productId: p1.id, unitPrice: dec("9.5"), quantity: 2 },
+          { productId: p2.id, unitPrice: dec(20), quantity: 0 },
+        ],
+        comment: "დაზიანებული",
+      });
+      const retRow = await delivery(ret.id);
+      expect([retRow.kind, dec(retRow.totalAmount).toString(), dec(retRow.paidAmount).toString()]).toEqual(["return", "-19", "0"]);
+      expect([await stock(p1.id), await debt(customer.id), await cash()]).toEqual([40, "221", cashBefore]);
+      const [receipt] = await tx.select().from(s.stockReceipts).where(eq(s.stockReceipts.deliveryId, ret.id));
+      expect([receipt.customerId, receipt.supplierId]).toEqual([customer.id, returns.id]);
+      expect(receipt.comment).toBe("მაღაზიიდან გამოტანა — Shop. დაზიანებული");
+      // The receipt goes only together with its operation; deleting the operation undoes both.
+      await failsInSavepoint(tx, (inner) => deleteReceipt(inner, actor, receipt.id));
+      await failsInSavepoint(tx, (inner) => createCustomerReturn(inner, actor, { customerId: customer.id, lines: [], comment: "" }));
+      await deleteDelivery(tx, actor, ret.id, "return");
+      expect([await stock(p1.id), await debt(customer.id)]).toEqual([38, "240"]);
+      expect(await tx.select().from(s.stockReceipts).where(eq(s.stockReceipts.id, receipt.id))).toEqual([]);
+
+      // Inactive: refused on new operations, orders and receipts; returns may still bring it back.
+      await setProductActive(tx, actor, p2.id, false);
+      const line = { productId: p2.id, price: "20", quantity: 1, giftQty: 0, leftoverQty: 0 };
+      const doc = { customerId: customer.id, lines: [line], discountFactor: "1", paidAmount: dec(0), paymentMethod: "cash" as const, hasWaybill: false, comment: "" };
+      await failsInSavepoint(tx, (inner) => createDelivery(inner, actor, doc));
+      await failsInSavepoint(tx, (inner) => createOrder(inner, actor, { ...doc, uploadStatus: "pending" }));
+      await failsInSavepoint(tx, (inner) =>
+        createReceipt(inner, actor, { supplierId: null, lines: [{ productId: p2.id, quantity: 1, unitCost: dec(1) }], comment: "" }),
+      );
+      await createCustomerReturn(tx, actor, { customerId: customer.id, lines: [{ productId: p2.id, unitPrice: dec(20), quantity: 1 }], comment: "" });
+      expect(await stock(p2.id)).toBe(45);
+      expect(store.id).toBeGreaterThan(0);
     });
   });
 });

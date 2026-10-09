@@ -1,9 +1,10 @@
-import { ClipboardList, Pencil, Wallet } from "lucide-react";
+import { ClipboardList, PackageOpen, Pencil, Wallet } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { DocumentLinesTable, sortLineRows } from "@/components/data/document-lines-table";
+import { HeadRow, TableCard } from "@/components/data/table-card";
 import { InfoList, InfoRow } from "@/components/info-list";
 import { Money } from "@/components/money";
 import { Notice } from "@/components/notice";
@@ -12,13 +13,14 @@ import { PrintButton } from "@/components/print-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { DeleteOperationButton } from "@/features/sales/components/delete-operation-button";
-import { OPERATION_KIND_LABEL, operationKind, UPLOAD_STATUS_LABEL } from "@/features/sales/labels";
+import { hasNoPayment, OPERATION_KIND_LABEL, operationKind, UPLOAD_STATUS_LABEL } from "@/features/sales/labels";
 import { leftoverValue, paymentLabel } from "@/features/sales/logic";
 import { getOperation } from "@/features/sales/queries";
 import { formatDate, formatDateTime } from "@/lib/dates";
-import { dec, formatAmount, formatDiscount } from "@/lib/money";
+import { dec, formatAmount, formatDiscount, formatQty, type Numeric, sum } from "@/lib/money";
 import { storeHref } from "@/lib/routes";
 import { idParam, param } from "@/lib/search-params";
 import { requireStore } from "@/server/auth/dal";
@@ -112,6 +114,7 @@ export default async function OperationPage({
                 number={d.number}
                 kind={d.kind}
                 hasLinkedCash={op.cash.length > 0}
+                total={d.totalAmount}
                 paid={d.paidAmount}
                 adjustment={d.adjustmentAmount}
               />
@@ -136,6 +139,20 @@ export default async function OperationPage({
               <p className="whitespace-pre-line text-muted-foreground">{d.comment || "მიზეზი არ არის მითითებული."}</p>
             </CardContent>
           </Card>
+        ) : d.kind === "count" ? (
+          <SimpleLinesTable
+            qtyLabel="ნაშთი"
+            totalLabel="ღირებულება"
+            rows={op.items.map((i) => ({ key: i.id, name: i.name, unitPrice: i.unitPrice, quantity: i.leftoverQty }))}
+            empty="ნაშთი არ დარჩა — ყველა პროდუქტი 0."
+          />
+        ) : d.kind === "return" ? (
+          <SimpleLinesTable
+            qtyLabel="გამოტანილი"
+            totalLabel="ჯამი"
+            rows={(op.returnReceipt?.items ?? []).map((i) => ({ key: i.id, name: i.name, unitPrice: i.unitPrice, quantity: i.quantity }))}
+            empty="პროდუქცია არ არის."
+          />
         ) : (
           <DocumentLinesTable rows={rows} total={d.totalAmount} empty="პროდუქცია არ არის — მხოლოდ თანხის მიღება." />
         )}
@@ -153,7 +170,7 @@ export default async function OperationPage({
                 <InfoRow label="აღებული თანხა">
                   <Money value={d.paidAmount} currency />
                 </InfoRow>
-                <InfoRow label="გადახდის მეთოდი">{d.kind === "adjustment" ? "—" : paymentLabel(d.paymentMethod)}</InfoRow>
+                <InfoRow label="გადახდის მეთოდი">{hasNoPayment(kind) ? "—" : paymentLabel(d.paymentMethod)}</InfoRow>
                 <InfoRow label="წინა ვალი">
                   <Money value={debtBefore} tone="debt" />
                 </InfoRow>
@@ -175,7 +192,7 @@ export default async function OperationPage({
             </CardContent>
           </Card>
 
-          {d.kind === "delivery" && d.comment ? (
+          {d.kind !== "adjustment" && d.comment ? (
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">კომენტარი</CardTitle>
@@ -197,6 +214,15 @@ export default async function OperationPage({
                 სალაროს ჩანაწერი ძველ სისტემაშია (მიუბმელი).
               </p>
             ) : null}
+            {op.returnReceipt ? (
+              <p className="flex items-center gap-1.5">
+                <PackageOpen className="size-3.5" />
+                საწყობში შევიდა:{" "}
+                <Link href={storeHref(store.id, `stock/${op.returnReceipt.id}`)} className="underline underline-offset-2">
+                  მიღება #{op.returnReceipt.number}
+                </Link>
+              </p>
+            ) : null}
             {op.order ? (
               <p className="flex items-center gap-1.5">
                 <ClipboardList className="size-3.5" />
@@ -216,5 +242,62 @@ export default async function OperationPage({
         </div>
       </div>
     </>
+  );
+}
+
+/** Lines of a count („ნაშთი“) or a return („გამოტანილი“): name, price, quantity, price × quantity. */
+function SimpleLinesTable({
+  rows,
+  qtyLabel,
+  totalLabel,
+  empty,
+}: {
+  rows: { key: number; name: string; unitPrice: Numeric; quantity: number }[];
+  qtyLabel: string;
+  totalLabel: string;
+  empty: string;
+}) {
+  if (rows.length === 0) {
+    return <p className="rounded-xl border border-dashed bg-card/50 p-10 text-center text-sm text-muted-foreground">{empty}</p>;
+  }
+  const lineTotal = (r: (typeof rows)[number]) => dec(r.unitPrice).times(r.quantity);
+  return (
+    <TableCard>
+      <Table>
+        <TableHeader>
+          <HeadRow>
+            <TableHead>დასახელება</TableHead>
+            <TableHead className="text-right">ფასი</TableHead>
+            <TableHead className="text-right">{qtyLabel}</TableHead>
+            <TableHead className="text-right">{totalLabel}</TableHead>
+          </HeadRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((r) => (
+            <TableRow key={r.key}>
+              <TableCell className="font-medium">{r.name}</TableCell>
+              <TableCell className="text-right">
+                <Money value={r.unitPrice} />
+              </TableCell>
+              <TableCell className="text-right tabular-nums">{formatQty(r.quantity)}</TableCell>
+              <TableCell className="text-right">
+                <Money value={lineTotal(r)} />
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+        <TableFooter>
+          <TableRow className="hover:bg-transparent">
+            <TableCell colSpan={2}>სულ</TableCell>
+            <TableCell className="text-right font-semibold tabular-nums">
+              {formatQty(rows.reduce((a, r) => a + r.quantity, 0))}
+            </TableCell>
+            <TableCell className="text-right font-semibold">
+              <Money value={sum(rows.map(lineTotal))} currency />
+            </TableCell>
+          </TableRow>
+        </TableFooter>
+      </Table>
+    </TableCard>
   );
 }

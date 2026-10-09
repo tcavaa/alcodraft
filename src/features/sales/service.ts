@@ -1,9 +1,9 @@
 import "server-only";
 
-import { and, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 
 import { todayIso } from "@/lib/dates";
-import { type Decimal, dec, formatAmount, toDb } from "@/lib/money";
+import { type Decimal, dec, formatAmount, formatQty, sum, toDb } from "@/lib/money";
 import { ActionError } from "@/server/action";
 import { audit } from "@/server/audit";
 import type { Tx } from "@/server/db";
@@ -16,7 +16,18 @@ import {
   nextNumber,
   requireCustomerInStore,
 } from "@/server/db/helpers";
-import { deliveries, deliveryItems, financeEntries, orderItems, orders, type products } from "@/server/db/schema";
+import {
+  deliveries,
+  deliveryItems,
+  financeEntries,
+  orderItems,
+  orders,
+  type products,
+  stockReceipts,
+  suppliers,
+} from "@/server/db/schema";
+
+import { createReceipt, removeReceipt } from "../stock/service";
 
 import { UPLOAD_STATUS_LABEL } from "./labels";
 import {
@@ -299,7 +310,9 @@ async function reconcileCash(
  */
 export async function updateDelivery(tx: Tx, actor: Actor, deliveryId: number, input: DocumentEditInput) {
   const delivery = await lockDelivery(tx, actor, deliveryId);
-  if (delivery.kind !== "delivery") throw new ActionError("კორექტირება არ რედაქტირდება — წაშალეთ და შექმენით ახალი.");
+  if (delivery.kind !== "delivery") {
+    throw new ActionError("კორექტირება, განაშთვა და გამოტანა არ რედაქტირდება — წაშალეთ და შექმენით ახალი.");
+  }
   assertUniqueProducts(input.lines);
   assertMethodKept(delivery.paymentMethod, input.paymentMethod);
   const customer = await requireCustomerInStore(tx, actor.storeId, delivery.customerId);
@@ -373,13 +386,20 @@ export async function deleteDelivery(
   tx: Tx,
   actor: Actor,
   deliveryId: number,
-  expectedKind: "delivery" | "adjustment",
+  expectedKind: DeliveryKind,
 ) {
   // Orders first, then the operation — the same order as order quick edits (no deadlock).
   await tx.select({ id: orders.id }).from(orders).where(eq(orders.deliveryId, deliveryId)).for("update");
   const delivery = await lockDelivery(tx, actor, deliveryId);
   if (delivery.kind !== expectedKind) throw new ActionError("ოპერაცია ამასობაში შეიცვალა — განაახლეთ გვერდი.");
   const customer = await requireCustomerInStore(tx, actor.storeId, delivery.customerId);
+  // A return's goods came in through its linked receipt: they go back out with it.
+  const [returnReceipt] = await tx
+    .select()
+    .from(stockReceipts)
+    .where(eq(stockReceipts.deliveryId, delivery.id))
+    .for("update");
+  if (returnReceipt) await removeReceipt(tx, actor, returnReceipt);
   const items = await tx.select().from(deliveryItems).where(eq(deliveryItems.deliveryId, delivery.id));
   const deltas = stockDeltas(items, 1);
   await lockProducts(tx, actor.storeId, [...deltas.keys()]);
@@ -429,6 +449,132 @@ export async function deleteDelivery(
     details: { delivery, items, keptCorrection },
   });
   return { keptCorrection };
+}
+
+type DeliveryKind = (typeof deliveries.$inferSelect)["kind"];
+
+export interface CountLine {
+  productId: number;
+  /** The price the customer gets the product for (shown on the form, kept for the leftover's value). */
+  unitPrice: Decimal;
+  leftoverQty: number;
+}
+
+/**
+ * „განაშთვა“ (new): leftovers counted on the customer's shelf, saved as a `count` operation with
+ * only „ნაშთი“ on its lines (quantity, gift and totals 0) — no stock, debt or cash effect. The
+ * old app did the same with a zero-quantity operation. Zero counts are not stored: products
+ * missing from the latest count have no leftover.
+ */
+export async function createCustomerCount(
+  tx: Tx,
+  actor: Actor,
+  input: { customerId: number; lines: CountLine[]; comment: string },
+) {
+  const customer = await requireCustomerInStore(tx, actor.storeId, input.customerId);
+  if (customer.isArchived) throw new ActionError("კლიენტი სანაგვეშია — ჯერ აღადგინეთ.");
+  assertUniqueProducts(input.lines);
+  if (input.lines.some((l) => l.leftoverQty < 0)) throw new ActionError("ნაშთი არ შეიძლება იყოს უარყოფითი.");
+  const lines = input.lines.filter((l) => l.leftoverQty > 0);
+  await lockProducts(tx, actor.storeId, lines.map((l) => l.productId));
+  const number = await nextNumber(tx, actor.storeId, "delivery");
+  const [row] = await tx
+    .insert(deliveries)
+    .values({
+      storeId: actor.storeId,
+      customerId: customer.id,
+      number,
+      kind: "count",
+      deliveryDate: todayIso(),
+      comment: input.comment,
+      createdById: actor.userId,
+    })
+    .returning({ id: deliveries.id });
+  if (lines.length) {
+    await tx.insert(deliveryItems).values(
+      lines.map((l) => ({
+        deliveryId: row.id,
+        productId: l.productId,
+        unitPrice: toDb(l.unitPrice),
+        leftoverQty: l.leftoverQty,
+        lineTotal: "0",
+      })),
+    );
+  }
+  await audit(tx, {
+    storeId: actor.storeId,
+    userId: actor.userId,
+    action: "delivery.count",
+    entityType: "delivery",
+    entityId: row.id,
+    summary: `განაშთვა #${number} — ${customer.name}: ${lines.length} პროდუქტი, ნაშთი ${formatQty(lines.reduce((a, l) => a + l.leftoverQty, 0))} ცალი`,
+  });
+  return { id: row.id, number };
+}
+
+export interface ReturnLine {
+  productId: number;
+  unitPrice: Decimal;
+  quantity: number;
+}
+
+/**
+ * „პროდუქციის გამოტანა“ (new): goods taken back from a customer. A `return` operation with
+ * total −Σ price × qty lowers the debt (never the cash book), and a linked stock receipt from the
+ * store's "returned goods" supplier puts the goods back in stock, so the receipt history shows it.
+ */
+export async function createCustomerReturn(
+  tx: Tx,
+  actor: Actor,
+  input: { customerId: number; lines: ReturnLine[]; comment: string },
+) {
+  const customer = await requireCustomerInStore(tx, actor.storeId, input.customerId);
+  if (customer.isArchived) throw new ActionError("კლიენტი სანაგვეშია — ჯერ აღადგინეთ.");
+  assertUniqueProducts(input.lines);
+  if (input.lines.some((l) => l.quantity < 0 || l.unitPrice.isNegative())) {
+    throw new ActionError("რაოდენობა და ფასი არ შეიძლება იყოს უარყოფითი.");
+  }
+  const lines = input.lines.filter((l) => l.quantity > 0);
+  if (lines.length === 0) throw new ActionError("შეიყვანეთ გამოტანილი რაოდენობა მინიმუმ ერთ პროდუქტზე.");
+  const total = sum(lines.map((l) => l.unitPrice.times(l.quantity)));
+
+  const number = await nextNumber(tx, actor.storeId, "delivery");
+  const [row] = await tx
+    .insert(deliveries)
+    .values({
+      storeId: actor.storeId,
+      customerId: customer.id,
+      number,
+      kind: "return",
+      deliveryDate: todayIso(),
+      totalAmount: toDb(total.negated()),
+      comment: input.comment,
+      createdById: actor.userId,
+    })
+    .returning({ id: deliveries.id });
+
+  const [returnsSupplier] = await tx
+    .select({ id: suppliers.id })
+    .from(suppliers)
+    .where(and(eq(suppliers.storeId, actor.storeId), eq(suppliers.isReturns, true), eq(suppliers.isArchived, false)))
+    .orderBy(asc(suppliers.id))
+    .limit(1);
+  const receipt = await createReceipt(tx, actor, {
+    supplierId: returnsSupplier?.id ?? null,
+    lines: lines.map((l) => ({ productId: l.productId, quantity: l.quantity, unitCost: l.unitPrice })),
+    comment: `მაღაზიიდან გამოტანა — ${customer.name}${input.comment ? `. ${input.comment}` : ""}`,
+    fromCustomer: { customerId: customer.id, deliveryId: row.id },
+  });
+
+  await audit(tx, {
+    storeId: actor.storeId,
+    userId: actor.userId,
+    action: "delivery.return",
+    entityType: "delivery",
+    entityId: row.id,
+    summary: `გამოტანა #${number} — ${customer.name}: ${formatQty(lines.reduce((a, l) => a + l.quantity, 0))} ცალი, ვალი −${formatAmount(total)} ₾ (მიღება #${receipt.number})`,
+  });
+  return { id: row.id, number };
 }
 
 /** A manual debt correction (replaces editing the database by hand). */

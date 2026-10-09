@@ -15,6 +15,8 @@ import { DISCOUNT_OPTIONS } from "./logic";
 import {
   cancelOrder,
   completeOrder,
+  createCustomerCount,
+  createCustomerReturn,
   createDebtAdjustment,
   createDelivery,
   createOrder,
@@ -94,11 +96,11 @@ export async function deleteDeliveryAction(
   storeId: number,
   deliveryId: number,
   customerId: number,
-  expectedKind: "delivery" | "adjustment",
+  expectedKind: "delivery" | "adjustment" | "count" | "return",
 ) {
   return runAction(async () => {
     const { actor } = await authorizeStore(storeId, { superAdminOnly: true });
-    const kind = parseInput(z.enum(["delivery", "adjustment"]), expectedKind);
+    const kind = parseInput(z.enum(["delivery", "adjustment", "count", "return"]), expectedKind);
     await db.transaction((tx) => deleteDelivery(tx, actor, deliveryId, kind));
     redirect(storeHref(storeId, `customers/${customerId}`));
   });
@@ -120,6 +122,50 @@ export async function adjustDebtAction(storeId: number, payload: z.input<typeof 
     );
     refresh();
   }, "ვალი დაკორექტირდა");
+}
+
+// ── Customer counts and returns ─────────────────────────────────────────────
+
+const countSchema = z.object({
+  requestId,
+  customerId: id,
+  lines: z
+    .array(z.object({ productId: id, unitPrice: amount({ required: true }), leftoverQty: wholeNumber() }))
+    .max(2000),
+  comment: text(5000),
+});
+export type CountPayload = z.input<typeof countSchema>;
+
+/** „განაშთვა“: the customer's shelf count. */
+export async function createCountAction(storeId: number, payload: CountPayload) {
+  return runAction(async () => {
+    const { actor } = await authorizeStore(storeId);
+    const data = parseInput(countSchema, payload);
+    await once(db, { key: data.requestId, action: "delivery.count", userId: actor.userId }, (tx) =>
+      createCustomerCount(tx, actor, data),
+    );
+    redirect(`${storeHref(storeId, `customers/${data.customerId}`)}?tab=leftover&counted=1`);
+  });
+}
+
+const returnSchema = z.object({
+  requestId,
+  customerId: id,
+  lines: z.array(z.object({ productId: id, unitPrice: amount({ required: true }), quantity: wholeNumber() })).max(2000),
+  comment: text(5000),
+});
+export type ReturnPayload = z.input<typeof returnSchema>;
+
+/** „პროდუქციის გამოტანა“: goods back from the customer — debt down, stock up. */
+export async function createReturnAction(storeId: number, payload: ReturnPayload) {
+  return runAction(async () => {
+    const { actor } = await authorizeStore(storeId);
+    const data = parseInput(returnSchema, payload);
+    const created = await once(db, { key: data.requestId, action: "delivery.return", userId: actor.userId }, (tx) =>
+      createCustomerReturn(tx, actor, data),
+    );
+    redirect(`${storeHref(storeId, `operations/${created.id}`)}?created=1`);
+  });
 }
 
 // ── Orders ──────────────────────────────────────────────────────────────────

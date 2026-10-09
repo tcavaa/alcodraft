@@ -2,7 +2,8 @@ import { bigint, date, index, integer, text, uniqueIndex } from "drizzle-orm/pg-
 
 import { app, createdAt, id, money } from "./_shared";
 import { stores, users } from "./auth";
-import { products, suppliers } from "./catalog";
+import { customers, products, suppliers } from "./catalog";
+import { deliveries } from "./sales";
 
 /** Old: `drinks_history` (one receipt = one batch id of that table). */
 export const stockReceipts = app
@@ -17,6 +18,9 @@ export const stockReceipts = app
       number: integer().notNull(),
       receiptDate: date({ mode: "string" }).notNull(),
       comment: text().notNull().default(""),
+      /** Goods taken back from a customer (new): the customer and the `return` operation that lowers their debt. */
+      customerId: integer().references(() => customers.id),
+      deliveryId: integer().references(() => deliveries.id),
       /** Batch id in the old `drinks_history` table. */
       legacyBatchId: bigint({ mode: "number" }),
       createdById: integer().references(() => users.id, { onDelete: "set null" }),
@@ -26,6 +30,7 @@ export const stockReceipts = app
       uniqueIndex().on(t.storeId, t.number),
       index().on(t.supplierId),
       index().on(t.storeId, t.receiptDate),
+      index().on(t.deliveryId),
     ],
   )
   .enableRLS();

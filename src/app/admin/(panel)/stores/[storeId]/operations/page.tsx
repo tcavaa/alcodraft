@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableFooter, TableHeader, TableRow } from "@/components/ui/table";
 import { CustomerFilter } from "@/features/sales/components/customer-filter";
-import { OPERATION_KIND_LABEL, operationKind } from "@/features/sales/labels";
+import { hasNoPayment, OPERATION_KIND_LABEL, operationKind } from "@/features/sales/labels";
 import { paymentLabel } from "@/features/sales/logic";
 import { listCustomerFilterOptions, listOperations, OPERATION_SORTS } from "@/features/sales/queries";
 import { formatDate } from "@/lib/dates";
@@ -34,7 +34,7 @@ export default async function OperationsPage({ params, searchParams }: PageProps
   const sp = await searchParams;
   const page = pageParam(sp);
   const method = enumParam(sp, "method", ["cash", "card", "back"] as const);
-  const kind = enumParam(sp, "kind", ["delivery", "payment", "adjustment"] as const);
+  const kind = enumParam(sp, "kind", ["delivery", "payment", "adjustment", "count", "return"] as const);
   const customerId = intParam(sp, "customer");
 
   const [list, customerOptions] = await Promise.all([
@@ -83,6 +83,8 @@ export default async function OperationsPage({ params, searchParams }: PageProps
               { value: "delivery", label: "მიწოდება" },
               { value: "payment", label: "გადახდა" },
               { value: "adjustment", label: "კორექტირება" },
+              { value: "count", label: "განაშთვა" },
+              { value: "return", label: "გამოტანა" },
             ]}
           />
           <ParamSelect
@@ -153,7 +155,7 @@ export default async function OperationsPage({ params, searchParams }: PageProps
                       <Money value={op.paid} tone="muted-zero" />
                     </TableCell>
                     <TableCell className="hidden text-right text-muted-foreground lg:table-cell">
-                      {k === "adjustment" ? "—" : paymentLabel(op.method)}
+                      {hasNoPayment(k) ? "—" : paymentLabel(op.method)}
                     </TableCell>
                     <TableCell className="text-right">
                       <Money value={op.debtAfter} tone="debt" />

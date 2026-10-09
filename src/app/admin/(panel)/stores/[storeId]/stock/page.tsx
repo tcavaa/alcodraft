@@ -114,6 +114,15 @@ export default async function StockPage({ params, searchParams }: PageProps<"/ad
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}
+                    {r.customerId ? (
+                      <Link
+                        href={storeHref(store.id, `customers/${r.customerId}`)}
+                        className="block max-w-[16rem] truncate text-xs text-muted-foreground hover:underline"
+                        title={r.customerName ?? undefined}
+                      >
+                        მაღაზიიდან გამოტანა: {r.customerName}
+                      </Link>
+                    ) : null}
                   </TableCell>
                   <TableCell className="hidden text-muted-foreground lg:table-cell">
                     <div className="max-w-[14rem] truncate" title={r.comment || undefined}>{r.comment}</div>

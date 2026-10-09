@@ -22,11 +22,20 @@ export interface ReceiptLine {
  * Old drinks/stock: each product's count grows by the received quantity; the
  * receipt remembers the count before and the purchase price paid. The product's
  * default purchase price is NOT changed (the old app highlighted differences instead).
+ *
+ * `fromCustomer` = goods taken back from a customer (`createCustomerReturn`): the receipt is
+ * linked to the customer and the `return` operation, `unitCost` holds the return price, and
+ * inactive products are accepted (they are coming back, not being sold).
  */
 export async function createReceipt(
   tx: Tx,
   actor: Actor,
-  input: { supplierId: number | null; lines: ReceiptLine[]; comment: string },
+  input: {
+    supplierId: number | null;
+    lines: ReceiptLine[];
+    comment: string;
+    fromCustomer?: { customerId: number; deliveryId: number };
+  },
 ) {
   const lines = input.lines.filter((l) => l.quantity !== 0);
   if (lines.length === 0) throw new ActionError("შეიყვანეთ მიღებული რაოდენობა მინიმუმ ერთ პროდუქტზე.");
@@ -42,7 +51,7 @@ export async function createReceipt(
     actor.storeId,
     lines.map((l) => l.productId),
   );
-  assertProductsAvailable(lines, productsById, "არააქტიური ან სანაგვეში მყოფი პროდუქტი");
+  if (!input.fromCustomer) assertProductsAvailable(lines, productsById, "არააქტიური ან სანაგვეში მყოფი პროდუქტი");
   const number = await nextNumber(tx, actor.storeId, "receipt");
   const [receipt] = await tx
     .insert(stockReceipts)
@@ -52,6 +61,8 @@ export async function createReceipt(
       number,
       receiptDate: todayIso(),
       comment: input.comment,
+      customerId: input.fromCustomer?.customerId ?? null,
+      deliveryId: input.fromCustomer?.deliveryId ?? null,
       createdById: actor.userId,
     })
     .returning({ id: stockReceipts.id });
@@ -86,7 +97,10 @@ export async function createReceipt(
   return { id: receipt.id, number };
 }
 
-/** Removes a receipt and takes its quantities back out of stock. */
+/**
+ * Removes a receipt and takes its quantities back out of stock. A return from a customer is
+ * removed together with its operation (`deleteDelivery`), so the debt and stock stay in step.
+ */
 export async function deleteReceipt(tx: Tx, actor: Actor, receiptId: number) {
   const [receipt] = await tx
     .select()
@@ -94,6 +108,15 @@ export async function deleteReceipt(tx: Tx, actor: Actor, receiptId: number) {
     .where(and(eq(stockReceipts.id, receiptId), eq(stockReceipts.storeId, actor.storeId)))
     .for("update");
   if (!receipt) throw new ActionError("მიღება ვერ მოიძებნა.");
+  if (receipt.deliveryId) {
+    throw new ActionError("ეს მაღაზიიდან გამოტანაა — წაშალეთ მისი ოპერაცია, მიღებაც მასთან ერთად წაიშლება.");
+  }
+  await removeReceipt(tx, actor, receipt);
+}
+
+/** Takes a receipt's quantities back out of stock and deletes it (row already locked). */
+export async function removeReceipt(tx: Tx, actor: Actor, receipt: typeof stockReceipts.$inferSelect) {
+  const receiptId = receipt.id;
   const items = await tx.select().from(stockReceiptItems).where(eq(stockReceiptItems.receiptId, receiptId));
   const deltas = new Map<number, number>();
   for (const i of items) deltas.set(i.productId, (deltas.get(i.productId) ?? 0) - i.quantity);

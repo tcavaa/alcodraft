@@ -174,7 +174,7 @@ export async function listCustomerDeliveries(
             {
               number: running.number,
               // the same three kinds the table shows: delivery, payment only, correction
-              kind: sql`case when ${running.kind} = 'adjustment' then 2 when ${running.total} = 0 and ${running.paid} <> 0 then 1 else 0 end`,
+              kind: sql`case when ${running.kind} = 'adjustment' then 2 when ${running.kind} = 'count' then 3 when ${running.kind} = 'return' then 4 when ${running.total} = 0 and ${running.paid} <> 0 then 1 else 0 end`,
               total: running.total,
               paid: running.paid,
               method: running.method,
@@ -222,3 +222,60 @@ export async function getCustomerProductSummary(customerId: number) {
 }
 
 /** Active customers for pickers (operation / order forms). */
+
+/** The customer's latest „განაშთვა“: a `count` operation, or an older operation that recorded leftovers. */
+export async function getLatestCount(customerId: number) {
+  const [row] = await db
+    .select({ id: deliveries.id, number: deliveries.number, date: deliveries.deliveryDate })
+    .from(deliveries)
+    .where(
+      and(
+        eq(deliveries.customerId, customerId),
+        or(
+          eq(deliveries.kind, "count"),
+          sql`exists (select 1 from ${deliveryItems} where ${deliveryItems.deliveryId} = ${deliveries.id} and ${deliveryItems.leftoverQty} <> 0)`,
+        ),
+      ),
+    )
+    .orderBy(desc(deliveries.id))
+    .limit(1);
+  return row ?? null;
+}
+
+/**
+ * Every product the customer has been delivered (plus anything in the latest count), for the
+ * „ნაშთი“ tab and the count / return forms: Σ delivered, average price (Σ line totals ÷ Σ
+ * delivered, as „ყველა დღე ერთად“), the last price charged and the leftover of the latest count.
+ */
+export async function getCustomerShelf(customerId: number) {
+  const latest = await getLatestCount(customerId);
+  const isDelivery = sql`${deliveries.kind} = 'delivery'`;
+  const delivered = sql<number>`coalesce(sum(${deliveryItems.quantity}) filter (where ${isDelivery}), 0)::int`;
+  const leftover = latest
+    ? sql<number>`coalesce(sum(${deliveryItems.leftoverQty}) filter (where ${deliveries.id} = ${latest.id}), 0)::int`
+    : sql<number>`0`;
+  const products_ = await db
+    .select({
+      productId: products.id,
+      name: products.name,
+      isActive: products.isActive,
+      isArchived: products.isArchived,
+      delivered,
+      total: sql<string>`coalesce(sum(${deliveryItems.lineTotal}) filter (where ${isDelivery}), 0)`,
+      lastPrice: sql<string | null>`(array_agg(${deliveryItems.unitPrice} order by ${deliveries.id} desc) filter (where ${isDelivery} and ${deliveryItems.quantity} > 0))[1]`,
+      leftover,
+    })
+    .from(deliveryItems)
+    .innerJoin(deliveries, eq(deliveries.id, deliveryItems.deliveryId))
+    .innerJoin(products, eq(products.id, deliveryItems.productId))
+    .where(eq(deliveries.customerId, customerId))
+    .groupBy(products.id)
+    .having(sql`${delivered} > 0 or ${leftover} > 0`)
+    .orderBy(asc(products.name));
+  return {
+    latestCount: latest,
+    products: products_.map((p) => ({ ...p, lastPrice: p.lastPrice ?? "0" })),
+  };
+}
+
+export type ShelfProduct = Awaited<ReturnType<typeof getCustomerShelf>>["products"][number];

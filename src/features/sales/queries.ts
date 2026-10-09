@@ -14,6 +14,8 @@ import {
   orderItems,
   orders,
   products,
+  stockReceiptItems,
+  stockReceipts,
   stores,
   suppliers,
   users,
@@ -53,7 +55,7 @@ export interface OperationListParams {
   from?: string;
   to?: string;
   method?: "cash" | "card" | "back";
-  kind?: "delivery" | "payment" | "adjustment";
+  kind?: "delivery" | "payment" | "adjustment" | "count" | "return";
   sort: SortState<OperationSort> | null;
   page: number;
   pageSize: number;
@@ -73,7 +75,7 @@ export async function listOperations(storeId: number, p: OperationListParams) {
   if (p.from) conditions.push(gte(running.date, p.from));
   if (p.to) conditions.push(lte(running.date, p.to));
   if (p.method) conditions.push(eq(running.method, p.method));
-  if (p.kind === "adjustment") conditions.push(eq(running.kind, "adjustment"));
+  if (p.kind === "adjustment" || p.kind === "count" || p.kind === "return") conditions.push(eq(running.kind, p.kind));
   if (p.kind === "payment") conditions.push(and(eq(running.kind, "delivery"), sql`${running.total} = 0`, sql`${running.paid} <> 0`));
   if (p.kind === "delivery") conditions.push(and(eq(running.kind, "delivery"), sql`not (${running.total} = 0 and ${running.paid} <> 0)`));
   const where = conditions.length ? and(...conditions) : undefined;
@@ -174,7 +176,35 @@ export async function getOperation(storeId: number, deliveryId: number) {
       .where(eq(financeEntries.deliveryId, deliveryId)),
     db.select({ id: orders.id, number: orders.number }).from(orders).where(eq(orders.deliveryId, deliveryId)),
   ]);
-  return { ...delivery, items, debtAfter: debt.after, cash, order: order ?? null };
+  // A return's goods are on its linked stock receipt.
+  const [receipt] =
+    delivery.delivery.kind === "return"
+      ? await db
+          .select({ id: stockReceipts.id, number: stockReceipts.number })
+          .from(stockReceipts)
+          .where(eq(stockReceipts.deliveryId, deliveryId))
+      : [];
+  const returned = receipt
+    ? await db
+        .select({
+          id: stockReceiptItems.id,
+          name: products.name,
+          unitPrice: stockReceiptItems.unitCost,
+          quantity: stockReceiptItems.quantity,
+        })
+        .from(stockReceiptItems)
+        .innerJoin(products, eq(products.id, stockReceiptItems.productId))
+        .where(eq(stockReceiptItems.receiptId, receipt.id))
+        .orderBy(asc(stockReceiptItems.id))
+    : [];
+  return {
+    ...delivery,
+    items,
+    debtAfter: debt.after,
+    cash,
+    order: order ?? null,
+    returnReceipt: receipt ? { ...receipt, items: returned } : null,
+  };
 }
 
 export interface ProductOption {

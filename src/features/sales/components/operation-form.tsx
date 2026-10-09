@@ -151,6 +151,7 @@ export function OperationForm({
           mode="entry"
           discountFactor={summary.discountFactor}
           stockMode={kind === "delivery" ? "block" : "warn"}
+          leftover={kind !== "delivery"}
         />
       </div>
 

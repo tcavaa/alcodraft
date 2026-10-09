@@ -84,6 +84,7 @@ export function LinesEditor({
   discountFactor,
   stockMode,
   savedTotals,
+  leftover = true,
 }: {
   products: ProductOption[];
   lineOf: (p: ProductOption) => LineState;
@@ -95,7 +96,10 @@ export function LinesEditor({
   stockMode: "block" | "warn" | "off";
   /** Edits: line totals as saved for products not changed yet (they are kept exactly). */
   savedTotals?: Map<number, Decimal>;
+  /** „ნაშთი“ column; a new operation leaves it out (leftovers are counted with „განაშთვა“). */
+  leftover?: boolean;
 }) {
+  const qtyFields = leftover ? QTY_FIELDS : QTY_FIELDS.filter((f) => f !== "leftoverQty");
   const [query, setQuery] = useState("");
   // "Only filled": rows filled when it was switched on stay visible while being edited.
   const [shown, setShown] = useState<Set<number> | null>(null);
@@ -149,7 +153,7 @@ export function LinesEditor({
               {stockMode !== "off" ? <th className="w-14 px-1.5 py-2.5 text-right font-medium">მარაგი</th> : null}
               <th className="w-[4.25rem] px-1.5 py-2.5 text-right font-medium">შეტანილი</th>
               <th className="w-[4.25rem] px-1.5 py-2.5 text-right font-medium">საჩუქარი</th>
-              <th className="w-[4.25rem] px-1.5 py-2.5 text-right font-medium">ნაშთი</th>
+              {leftover ? <th className="w-[4.25rem] px-1.5 py-2.5 text-right font-medium">ნაშთი</th> : null}
               <th className="w-24 px-3 py-2.5 text-right font-medium">ჯამი</th>
             </tr>
           </thead>
@@ -201,7 +205,7 @@ export function LinesEditor({
                       {formatQty(p.stockQty)}
                     </td>
                   ) : null}
-                  {QTY_FIELDS.map((field, i) => (
+                  {qtyFields.map((field, i) => (
                     <td key={field} className="px-1.5 py-1.5">
                       <Input
                         value={l[field]}
@@ -226,7 +230,7 @@ export function LinesEditor({
             })}
             {visible.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-3 py-10 text-center text-muted-foreground">
+                <td colSpan={8} className="px-3 py-10 text-center text-muted-foreground">
                   პროდუქტი ვერ მოიძებნა.
                 </td>
               </tr>

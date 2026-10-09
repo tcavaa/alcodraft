@@ -20,8 +20,14 @@ export const uploadStatus = app.enum("upload_status", ["pending", "uploaded"]);
 
 export const orderStatus = app.enum("order_status", ["open", "completed", "cancelled"]);
 
-/** `adjustment` = a manual debt correction with no products. */
-export const deliveryKind = app.enum("delivery_kind", ["delivery", "adjustment"]);
+/**
+ * `adjustment` = a manual debt correction with no products.
+ * `count` (განაშთვა, new) = leftovers counted on the customer's shelf: lines with only „ნაშთი“; no
+ * stock, debt or cash effect.
+ * `return` (პროდუქციის გამოტანა, new) = goods taken back from the customer: total = −Σ price × qty
+ * lowers the debt, no cash entry; the goods go back into stock through the linked stock receipt.
+ */
+export const deliveryKind = app.enum("delivery_kind", ["delivery", "adjustment", "count", "return"]);
 
 /** New values are appended (Postgres can add enum values but not reorder them); display order is in `CUSTOMER_COLORS`. */
 export const customerColor = app.enum("customer_color", ["green", "yellow", "red", "blue", "black", "white"]);

@@ -15,6 +15,7 @@ export function DeleteOperationButton({
   number,
   kind,
   hasLinkedCash,
+  total,
   paid,
   adjustment,
 }: {
@@ -22,8 +23,10 @@ export function DeleteOperationButton({
   deliveryId: number;
   customerId: number;
   number: number;
-  kind: "delivery" | "adjustment";
+  kind: "delivery" | "adjustment" | "count" | "return";
   hasLinkedCash: boolean;
+  /** Operation total (a return's is −Σ returned). */
+  total: string;
   paid: string;
   /** Old manual debt correction carried by an imported operation. */
   adjustment: string;
@@ -37,10 +40,25 @@ export function DeleteOperationButton({
           წაშლა
         </Button>
       }
-      title={kind === "adjustment" ? `კორექტირება #${number} — წაშლა?` : `ოპერაცია #${number} — წაშლა?`}
+      title={
+        kind === "adjustment"
+          ? `კორექტირება #${number} — წაშლა?`
+          : kind === "count"
+            ? `განაშთვა #${number} — წაშლა?`
+            : kind === "return"
+              ? `გამოტანა #${number} — წაშლა?`
+              : `ოპერაცია #${number} — წაშლა?`
+      }
       description={
         kind === "adjustment" ? (
           <p>კლიენტის ვალი შეიცვლება {formatAmount(dec(adjustment).negated())} ₾-ით (ამ და შემდეგი ოპერაციებისთვის).</p>
+        ) : kind === "count" ? (
+          <p>დათვლილი ნაშთი წაიშლება. საწყობი, ვალი და სალარო არ იცვლება.</p>
+        ) : kind === "return" ? (
+          <>
+            <p>გამოტანილი პროდუქცია ისევ ჩამოიწერება საწყობიდან და მისი მიღებაც წაიშლება.</p>
+            <p>კლიენტის ვალი გაიზრდება {formatAmount(dec(total).negated())} ₾-ით (ამ და შემდეგი ოპერაციებისთვის).</p>
+          </>
         ) : (
           <>
             <p>პროდუქცია დაბრუნდება საწყობში, კლიენტის ვალი გადაითვლება.</p>

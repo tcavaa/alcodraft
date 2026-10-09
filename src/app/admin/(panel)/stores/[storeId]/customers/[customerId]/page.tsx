@@ -1,4 +1,4 @@
-import { Archive, ClipboardList, IdCard, MapPin, Pencil, Phone, Plus, UserRound } from "lucide-react";
+import { Archive, ClipboardCheck, ClipboardList, IdCard, MapPin, PackageMinus, Pencil, Phone, Plus, UserRound } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -9,6 +9,7 @@ import { Pagination } from "@/components/data/pagination";
 import { SortableHead } from "@/components/data/sortable-head";
 import { HeadRow, TableCard } from "@/components/data/table-card";
 import { Money } from "@/components/money";
+import { Notice } from "@/components/notice";
 import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
 import { Badge } from "@/components/ui/badge";
@@ -23,14 +24,16 @@ import {
   CUSTOMER_OPERATION_SORTS,
   getCustomer,
   getCustomerProductSummary,
+  getCustomerShelf,
   listCustomerDeliveries,
 } from "@/features/customers/queries";
-import { OPERATION_KIND_LABEL, operationKind } from "@/features/sales/labels";
+import { hasNoPayment, OPERATION_KIND_LABEL, operationKind } from "@/features/sales/labels";
 import { paymentLabel } from "@/features/sales/logic";
 import { formatDate } from "@/lib/dates";
-import { dec, sum } from "@/lib/money";
+import { dec, formatQty, sum } from "@/lib/money";
 import { storeHref } from "@/lib/routes";
-import { idParam, pageParam, param, type SearchParams, sortParam } from "@/lib/search-params";
+import { enumParam, idParam, pageParam, param, type SearchParams, sortParam } from "@/lib/search-params";
+import { sortRows } from "@/lib/sort";
 import { requireStore } from "@/server/auth/dal";
 
 export const metadata: Metadata = { title: "კლიენტი" };
@@ -47,7 +50,7 @@ export default async function CustomerPage({
   if (!data) notFound();
   const { customer, stats, openOrders } = data;
   const sp = await searchParams;
-  const tab = param(sp, "tab") === "summary" ? "summary" : "operations";
+  const tab = enumParam(sp, "tab", ["summary", "leftover"] as const) ?? "operations";
   const page = pageParam(sp);
   const pathname = storeHref(store.id, `customers/${customer.id}`);
 
@@ -100,6 +103,18 @@ export default async function CustomerPage({
                   <Link href={`${storeHref(store.id, "orders/new")}?customer=${customer.id}`}>
                     <ClipboardList />
                     შეკვეთა
+                  </Link>
+                </Button>
+                <Button variant="outline" asChild>
+                  <Link href={`${pathname}/count`}>
+                    <ClipboardCheck />
+                    განაშთვა
+                  </Link>
+                </Button>
+                <Button variant="outline" asChild>
+                  <Link href={`${pathname}/return`}>
+                    <PackageMinus />
+                    პროდუქციის გამოტანა
                   </Link>
                 </Button>
                 <Button asChild>
@@ -174,14 +189,19 @@ export default async function CustomerPage({
           options={[
             { value: "operations", label: "ოპერაციები" },
             { value: "summary", label: "ყველა დღე ერთად" },
+            { value: "leftover", label: "ნაშთი" },
           ]}
         />
       </div>
 
+      {param(sp, "counted") ? <Notice>განაშთვა შენახულია.</Notice> : null}
+
       {tab === "operations" ? (
         <OperationsTable storeId={store.id} customerId={customer.id} page={page} pathname={pathname} sp={sp} stats={stats} />
-      ) : (
+      ) : tab === "summary" ? (
         <ProductSummary customerId={customer.id} sp={sp} />
+      ) : (
+        <LeftoverSummary storeId={store.id} customerId={customer.id} sp={sp} />
       )}
     </>
   );
@@ -270,7 +290,7 @@ async function OperationsTable({
                     <Money value={op.paid} tone="muted-zero" />
                   </TableCell>
                   <TableCell className="hidden text-right text-muted-foreground sm:table-cell">
-                    {kind === "adjustment" ? "—" : paymentLabel(op.method)}
+                    {hasNoPayment(kind) ? "—" : paymentLabel(op.method)}
                   </TableCell>
                   <TableCell className="text-right font-medium">
                     <Money value={op.debtAfter} tone="debt" />
@@ -331,4 +351,81 @@ async function ProductSummary({ customerId, sp }: { customerId: number; sp: Sear
     "ssort",
   );
   return <DocumentLinesTable rows={rows} total={sum(all.map((r) => r.total))} param="ssort" priceLabel="საშუალო ფასი" />;
+}
+
+const LEFTOVER_SORTS = ["name", "price", "quantity", "leftover"] as const;
+
+/**
+ * „ნაშთი“ (new): per product Σ delivered and average price (as „ყველა დღე ერთად“) next to what the
+ * latest „განაშთვა“ found on the shelf.
+ */
+async function LeftoverSummary({ storeId, customerId, sp }: { storeId: number; customerId: number; sp: SearchParams }) {
+  const { latestCount, products } = await getCustomerShelf(customerId);
+  if (products.length === 0) {
+    return <p className="rounded-xl border border-dashed bg-card/50 p-10 text-center text-sm text-muted-foreground">მიწოდებული პროდუქცია არ არის.</p>;
+  }
+  const avg = (p: (typeof products)[number]) => (p.delivered > 0 ? dec(p.total).div(p.delivered) : dec(p.lastPrice));
+  const rows = sortRows(products, sortParam(sp, LEFTOVER_SORTS, "lsort"), {
+    name: (p) => p.name,
+    price: avg,
+    quantity: (p) => p.delivered,
+    leftover: (p) => p.leftover,
+  });
+  return (
+    <>
+      <p className="mb-3 text-sm text-muted-foreground">
+        {latestCount ? (
+          <>
+            ბოლო განაშთვა:{" "}
+            <Link href={storeHref(storeId, `operations/${latestCount.id}`)} className="font-medium text-foreground hover:underline">
+              {formatDate(latestCount.date)} (#{latestCount.number})
+            </Link>
+          </>
+        ) : (
+          "განაშთვა ჯერ არ ჩატარებულა — ნაშთი 0."
+        )}
+      </p>
+      <TableCard>
+        <Table>
+          <TableHeader>
+            <HeadRow>
+              <SortableHead column="name" param="lsort">
+                დასახელება
+              </SortableHead>
+              <SortableHead column="price" param="lsort" className="text-right">
+                საშუალო ფასი
+              </SortableHead>
+              <SortableHead column="quantity" param="lsort" className="text-right">
+                შეტანილი
+              </SortableHead>
+              <SortableHead column="leftover" param="lsort" className="text-right">
+                ნაშთი
+              </SortableHead>
+            </HeadRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((p) => (
+              <TableRow key={p.productId}>
+                <TableCell className="font-medium">{p.name}</TableCell>
+                <TableCell className="text-right">
+                  <Money value={avg(p)} />
+                </TableCell>
+                <TableCell className="text-right tabular-nums">{formatQty(p.delivered)}</TableCell>
+                <TableCell className="text-right font-medium tabular-nums">
+                  {p.leftover ? formatQty(p.leftover) : <span className="text-muted-foreground">0</span>}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+          <TableFooter>
+            <TableRow className="hover:bg-transparent">
+              <TableCell colSpan={2}>სულ</TableCell>
+              <TableCell className="text-right font-semibold tabular-nums">{formatQty(products.reduce((a, p) => a + p.delivered, 0))}</TableCell>
+              <TableCell className="text-right font-semibold tabular-nums">{formatQty(products.reduce((a, p) => a + p.leftover, 0))}</TableCell>
+            </TableRow>
+          </TableFooter>
+        </Table>
+      </TableCard>
+    </>
+  );
 }

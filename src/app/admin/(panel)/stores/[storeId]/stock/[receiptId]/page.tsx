@@ -1,3 +1,4 @@
+import { ArrowRight } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -6,6 +7,7 @@ import { SortableHead } from "@/components/data/sortable-head";
 import { HeadRow, TableCard } from "@/components/data/table-card";
 import { Money } from "@/components/money";
 import { Notice } from "@/components/notice";
+import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/page-header";
 import { PrintButton } from "@/components/print-button";
 import { Table, TableBody, TableCell, TableFooter, TableHeader, TableRow } from "@/components/ui/table";
@@ -58,12 +60,28 @@ export default async function ReceiptPage({ params, searchParams }: PageProps<"/
                 </Link>
               </>
             ) : null}
+            {r.customerId ? (
+              <>
+                {" · მაღაზიიდან გამოტანა: "}
+                <Link href={storeHref(store.id, `customers/${r.customerId}`)} className="font-medium text-foreground hover:underline">
+                  {data.customerName}
+                </Link>
+              </>
+            ) : null}
           </>
         }
         actions={
           <>
             <PrintButton />
-            {user.role === "super_admin" ? <DeleteReceiptButton storeId={store.id} receiptId={r.id} number={r.number} /> : null}
+            {r.deliveryId ? (
+              <Button variant="outline" asChild className="print:hidden">
+                <Link href={storeHref(store.id, `operations/${r.deliveryId}`)}>
+                  გამოტანა #{data.deliveryNumber} <ArrowRight />
+                </Link>
+              </Button>
+            ) : user.role === "super_admin" ? (
+              <DeleteReceiptButton storeId={store.id} receiptId={r.id} number={r.number} />
+            ) : null}
           </>
         }
       />
@@ -78,7 +96,7 @@ export default async function ReceiptPage({ params, searchParams }: PageProps<"/
                 რაოდენობა
               </SortableHead>
               <SortableHead column="cost" className="text-right">
-                შემოტანის ფასი
+                {r.customerId ? "გამოტანის ფასი" : "შემოტანის ფასი"}
               </SortableHead>
               <SortableHead column="added" className="text-right">
                 დამატებული
@@ -93,7 +111,8 @@ export default async function ReceiptPage({ params, searchParams }: PageProps<"/
           </TableHeader>
           <TableBody>
             {items.map((i) => {
-              const differs = !dec(i.unitCost).equals(i.currentPurchasePrice);
+              // A return carries the price it was taken back at, not a purchase price.
+              const differs = !r.customerId && !dec(i.unitCost).equals(i.currentPurchasePrice);
               return (
                 <TableRow key={i.id}>
                   <TableCell className="font-medium">

@@ -6,14 +6,14 @@
 |---|---|---|
 | App | Vercel project, functions region **fra1** (`vercel.json`) | Next.js 16, Node ≥ 20.9 |
 | Database | Supabase project "Alcodraft", **eu-central-1** (Frankfurt), Postgres 17 | same region as the functions |
-| Backups | GitHub Actions weekly `pg_dump`, gpg-encrypted, kept 90 days (`.github/workflows/backup.yml`) | the Supabase free plan has no restorable backups |
+| Backups | none (owner's decision) — one-off `pg_dump` before risky changes, see below | the Supabase free plan has no restorable backups |
 
 ## Environment variables
 
 | Name | Value | Used by |
 |---|---|---|
 | `DATABASE_URL` | Supabase → Connect → **Transaction pooler** URI (port 6543) with the DB password | app (Vercel + `npm run dev`) |
-| `DATABASE_URL_SESSION` | Supabase → Connect → **Session pooler** URI (port 5432) | `db:migrate`, `legacy:*` scripts, backups |
+| `DATABASE_URL_SESSION` | Supabase → Connect → **Session pooler** URI (port 5432) | `db:migrate`, `legacy:*` scripts |
 | `LEGACY_DATABASE_URL` | `mysql://root@127.0.0.1:3306/alcodraft_legacy` | import script only (local) |
 | `TEST_DATABASE_URL` | a disposable Postgres (local or a Supabase branch) — **never production** | integration tests only (optional) |
 
@@ -41,41 +41,21 @@ Locally they live in `.env.local` (git-ignored; template: `.env.example`). On Ve
 
 ## Backups
 
-`.github/workflows/backup.yml` runs every Sunday at 03:30 Tbilisi time (and on demand from the
-Actions tab): `pg_dump` of schemas `app` and `drizzle` through the session pooler, **encrypted with
-gpg (AES-256)** and kept 90 days as a workflow artifact (the last ~13 weeks). The repository is public
-and artifacts of public repositories can be downloaded by anyone, so an unencrypted dump must never be
-uploaded. Before anything risky (a bulk fix, a big migration) also take a one-off dump locally.
-
-Setup: GitHub repo → Settings → Secrets and variables → Actions → two repository secrets:
-
-| Secret | Value |
-|---|---|
-| `SUPABASE_DB_URL` | the **Session pooler** URI (raw password is fine — the workflow splits it itself) |
-| `BACKUP_PASSPHRASE` | a long random passphrase; store a copy in your password manager — without it a backup cannot be opened |
-
-Until both exist the job is skipped with a notice (no failure e-mails). Test it once with
-Actions → Database backup → Run workflow.
-
-GitHub turns off scheduled workflows in a public repository after 60 days without any commit; it
-e-mails a warning first. If that happens, Actions → Database backup → Enable workflow.
-
-Restore (download the artifact zip from the run, unzip it, then):
+Not enabled — the owner decided on 2026-10-07 that automatic backups are not needed. The Supabase
+free plan keeps no restorable backups, so before anything risky (a re-import, a bulk fix) take a
+one-off copy:
 
 ```bash
-gpg --decrypt alcodraft-YYYY-MM-DD.dump.gpg > alcodraft.dump
+pg_dump --schema=app --schema=drizzle --no-owner --no-privileges --format=custom \
+  "postgresql://…session pooler URI with percent-encoded password…" > alcodraft-backup.dump
 ```
 
-```bash
-pg_restore --no-owner --no-privileges --dbname "postgresql://…session pooler URI…" alcodraft.dump
-```
+An encrypted nightly GitHub Actions job existed and can be restored if this changes:
+`git show a2ef0a4:.github/workflows/backup.yml` (needs secrets `SUPABASE_DB_URL` and `BACKUP_PASSPHRASE`;
+the repository is public, so never upload an unencrypted dump).
 
-(`pg_restore` needs a percent-encoded password in a URI; alternatively set `PGHOST`, `PGPORT`,
-`PGUSER`, `PGPASSWORD`, `PGDATABASE` and pass only `alcodraft.dump`. Restore into an empty database
-or after dropping the `app` schema.)
-
-Free Supabase projects pause after 7 days without any activity (the weekly dump counts as activity);
-if one ever pauses, resume it from the Supabase dashboard — the data is kept.
+Free Supabase projects pause after 7 days without any activity; if that ever happens, resume the
+project from the Supabase dashboard (data is kept).
 
 ## Costs (as checked Oct 2026)
 

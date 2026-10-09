@@ -18,6 +18,11 @@ export const suppliers = app
        * Its stock-receipt form lists every product instead of only this supplier's.
        */
       isReturns: boolean().notNull().default(false),
+      /**
+       * „გამოტანილები“ (new): goods taken back from customers („პროდუქციის გამოტანა“) are received
+       * from this supplier. One per store, created with the store (or on the first return).
+       */
+      isCustomerReturns: boolean().notNull().default(false),
       isArchived: boolean().notNull().default(false),
       legacyId: integer(),
       ...timestamps(),

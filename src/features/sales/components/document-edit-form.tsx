@@ -281,6 +281,7 @@ export function DocumentEditForm({
           discountFactor={summary.discountFactor}
           stockMode={kind === "order" ? "warn" : "off"}
           savedTotals={savedTotals}
+          onlyFilledAtStart={kind === "order"}
         />
       </div>
       <div className="xl:sticky xl:top-20">

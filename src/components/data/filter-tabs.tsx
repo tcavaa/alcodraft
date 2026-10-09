@@ -18,8 +18,9 @@ export function FilterTabs({
   value: string;
 }) {
   return (
-    // On a phone the tabs scroll sideways instead of wrapping their labels.
-    <div className="inline-flex h-9 max-w-full items-center overflow-x-auto rounded-lg border bg-muted/60 p-0.5 text-sm">
+    // Full width next to a search box (shrink-0); only a row narrower than the tabs (a phone)
+    // makes them scroll sideways instead of wrapping their labels.
+    <div className="inline-flex h-9 max-w-full shrink-0 items-center overflow-x-auto rounded-lg border bg-muted/60 p-0.5 text-sm">
       {options.map((o, i) => (
         <Link
           key={o.value}

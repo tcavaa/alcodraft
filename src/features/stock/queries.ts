@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, count, desc, eq, gte, ilike, isNull, lte, ne, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, ilike, lte, ne, or, sql, type SQL } from "drizzle-orm";
 
 import type { SortState } from "@/lib/sort";
 import { db } from "@/server/db";
@@ -177,14 +177,15 @@ const supplierPayableQuery = () =>
   db
   .select({
     supplierId: stockReceipts.supplierId,
-    payable: sql<string>`sum(${stockReceiptItems.quantity} * ${stockReceiptItems.unitCost})`.as("payable"),
+    // Goods taken back from customers carry their return price, not a purchase cost: nothing is owed for them.
+    payable: sql<string>`coalesce(sum(${stockReceiptItems.quantity} * ${stockReceiptItems.unitCost}) filter (where ${stockReceipts.customerId} is null), 0)`.as(
+      "payable",
+    ),
     receipts: sql<number>`count(distinct ${stockReceipts.id})::int`.as("receipts"),
     lastDate: sql<string>`max(${stockReceipts.receiptDate})`.as("last_date"),
   })
   .from(stockReceipts)
   .innerJoin(stockReceiptItems, eq(stockReceiptItems.receiptId, stockReceipts.id))
-  // Goods taken back from customers carry their return price, not a purchase cost: nothing is owed for them.
-  .where(isNull(stockReceipts.customerId))
   .groupBy(stockReceipts.supplierId)
   .as("supplier_payable");
 
@@ -207,6 +208,7 @@ export async function listSuppliers(storeId: number, archived: boolean) {
       id: suppliers.id,
       name: suppliers.name,
       isReturns: suppliers.isReturns,
+      isCustomerReturns: suppliers.isCustomerReturns,
       payable: sql<string>`coalesce(${supplierPayable.payable}, 0)`,
       paid: sql<string>`coalesce(${supplierPaid.paid}, 0)`,
       receipts: sql<number>`coalesce(${supplierPayable.receipts}, 0)`,
@@ -239,6 +241,8 @@ export async function getSupplier(storeId: number, supplierId: number) {
         number: stockReceipts.number,
         date: stockReceipts.receiptDate,
         comment: stockReceipts.comment,
+        /** Goods taken back from a customer: shown, but nothing is owed for them. */
+        fromCustomer: sql<boolean>`${stockReceipts.customerId} is not null`,
         lines: receiptTotals.lines,
         cost: sql<string>`coalesce(${receiptTotals.cost}, 0)`,
       })

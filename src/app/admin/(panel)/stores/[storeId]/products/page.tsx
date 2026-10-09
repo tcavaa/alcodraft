@@ -78,12 +78,13 @@ export default async function ProductsPage({ params, searchParams }: PageProps<"
           </>
         }
       />
-      <div className="mb-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <SearchInput placeholder="ჩაწერე დასახელება…" />
+      {/* Wraps instead of squeezing the search box when the four filters don't fit on one line. */}
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+          <SearchInput placeholder="ჩაწერე დასახელება…" className="sm:w-64" />
           <ArchivedTabs pathname={pathname} searchParams={sp} archived={archived} counts={counts} />
         </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
           {archived ? null : (
             <ParamSelect
               param="status"

@@ -85,6 +85,7 @@ export function LinesEditor({
   stockMode,
   savedTotals,
   leftover = true,
+  onlyFilledAtStart = false,
 }: {
   products: ProductOption[];
   lineOf: (p: ProductOption) => LineState;
@@ -98,11 +99,15 @@ export function LinesEditor({
   savedTotals?: Map<number, Decimal>;
   /** „ნაშთი“ column; a new operation leaves it out (leftovers are counted with „განაშთვა“). */
   leftover?: boolean;
+  /** Start with „მხოლოდ შევსებული“ on (an open order shows its own products first). */
+  onlyFilledAtStart?: boolean;
 }) {
   const qtyFields = leftover ? QTY_FIELDS : QTY_FIELDS.filter((f) => f !== "leftoverQty");
   const [query, setQuery] = useState("");
   // "Only filled": rows filled when it was switched on stay visible while being edited.
-  const [shown, setShown] = useState<Set<number> | null>(null);
+  const [shown, setShown] = useState<Set<number> | null>(() =>
+    onlyFilledAtStart ? new Set(products.filter((p) => lineHasValues(lineOf(p))).map((p) => p.id)) : null,
+  );
 
   const q = query.trim().toLowerCase();
   const visible = products.filter(

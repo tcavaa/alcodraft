@@ -519,10 +519,28 @@ export interface ReturnLine {
   quantity: number;
 }
 
+/** The store's „გამოტანილები“ supplier; created when missing (e.g. deleted while it had no receipts). */
+async function customerReturnsSupplierId(tx: Tx, storeId: number) {
+  const [existing] = await tx
+    .select({ id: suppliers.id })
+    .from(suppliers)
+    .where(and(eq(suppliers.storeId, storeId), eq(suppliers.isCustomerReturns, true)))
+    .orderBy(asc(suppliers.isArchived), asc(suppliers.id))
+    .limit(1);
+  if (existing) return existing.id;
+  const [created] = await tx
+    .insert(suppliers)
+    .values({ storeId, name: CUSTOMER_RETURNS_SUPPLIER, isCustomerReturns: true })
+    .returning({ id: suppliers.id });
+  return created.id;
+}
+
+export const CUSTOMER_RETURNS_SUPPLIER = "გამოტანილები";
+
 /**
  * „პროდუქციის გამოტანა“ (new): goods taken back from a customer. A `return` operation with
  * total −Σ price × qty lowers the debt (never the cash book), and a linked stock receipt from the
- * store's "returned goods" supplier puts the goods back in stock, so the receipt history shows it.
+ * store's „გამოტანილები“ supplier puts the goods back in stock, so the receipt history shows it.
  */
 export async function createCustomerReturn(
   tx: Tx,
@@ -581,14 +599,8 @@ export async function createCustomerReturn(
     })
     .returning({ id: deliveries.id });
 
-  const [returnsSupplier] = await tx
-    .select({ id: suppliers.id })
-    .from(suppliers)
-    .where(and(eq(suppliers.storeId, actor.storeId), eq(suppliers.isReturns, true), eq(suppliers.isArchived, false)))
-    .orderBy(asc(suppliers.id))
-    .limit(1);
   const receipt = await createReceipt(tx, actor, {
-    supplierId: returnsSupplier?.id ?? null,
+    supplierId: await customerReturnsSupplierId(tx, actor.storeId),
     lines: lines.map((l) => ({ productId: l.productId, quantity: l.quantity, unitCost: l.unitPrice })),
     comment: `მაღაზიიდან გამოტანა — ${customer.name}${input.comment ? `. ${input.comment}` : ""}`,
     fromCustomer: { customerId: customer.id, deliveryId: row.id },

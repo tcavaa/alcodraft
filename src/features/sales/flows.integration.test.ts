@@ -467,7 +467,6 @@ describe.skipIf(!enabled)("money & stock flows (rolled back)", () => {
 
   it("counts leftovers, takes goods back from a customer and hides inactive products", async () => {
     await inRollback(async (tx, { actor, store, stock, cash, debt, delivery }) => {
-      const returns = await createSupplier(tx, actor, { name: "დაბრუნებული", isReturns: true });
       const p1 = await createProduct(tx, actor, { name: "Wine A", supplierId: null, salePrice: dec(10), purchasePrice: dec(6), comment: "" });
       const p2 = await createProduct(tx, actor, { name: "Wine B", supplierId: null, salePrice: dec(20), purchasePrice: dec(12), comment: "" });
       await createReceipt(tx, actor, {
@@ -524,7 +523,12 @@ describe.skipIf(!enabled)("money & stock flows (rolled back)", () => {
       expect([retRow.kind, dec(retRow.totalAmount).toString(), dec(retRow.paidAmount).toString()]).toEqual(["return", "-19", "0"]);
       expect([await stock(p1.id), await debt(customer.id), await cash()]).toEqual([40, "221", cashBefore]);
       const [receipt] = await tx.select().from(s.stockReceipts).where(eq(s.stockReceipts.deliveryId, ret.id));
-      expect([receipt.customerId, receipt.supplierId]).toEqual([customer.id, returns.id]);
+      // Received from the store's „გამოტანილები“ supplier (created with the store).
+      const [fromCustomers] = await tx
+        .select()
+        .from(s.suppliers)
+        .where(and(eq(s.suppliers.storeId, store.id), eq(s.suppliers.isCustomerReturns, true)));
+      expect([receipt.customerId, receipt.supplierId, fromCustomers.name]).toEqual([customer.id, fromCustomers.id, "გამოტანილები"]);
       expect(receipt.comment).toBe("მაღაზიიდან გამოტანა — Shop. დაზიანებული");
       // The receipt goes only together with its operation; deleting the operation undoes both.
       await failsInSavepoint(tx, (inner) => deleteReceipt(inner, actor, receipt.id));

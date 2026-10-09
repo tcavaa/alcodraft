@@ -93,6 +93,11 @@ export default async function SuppliersPage({ params, searchParams }: PageProps<
                         დაბრუნებული
                       </Badge>
                     ) : null}
+                    {s.isCustomerReturns ? (
+                      <Badge variant="outline" className="ml-2">
+                        მაღაზიიდან გამოტანა
+                      </Badge>
+                    ) : null}
                     <div className="text-xs text-muted-foreground">{s.receipts} მიღება</div>
                   </TableCell>
                   <TableCell className="hidden text-right text-muted-foreground md:table-cell">{s.lastDate ? formatDate(s.lastDate) : "—"}</TableCell>

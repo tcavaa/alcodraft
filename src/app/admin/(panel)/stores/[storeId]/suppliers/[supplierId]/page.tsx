@@ -51,7 +51,8 @@ export default async function SupplierPage({ params, searchParams }: PageProps<"
     sp,
     "psort",
   );
-  const payable = sum(data.receipts.map((r) => r.cost));
+  // Same rule as the supplier list: goods taken back from customers are not owed.
+  const payable = sum(data.receipts.filter((r) => !r.fromCustomer).map((r) => r.cost));
   const remaining = payable.minus(dec(data.paid));
 
   return (
@@ -63,6 +64,7 @@ export default async function SupplierPage({ params, searchParams }: PageProps<"
           <span className="flex items-center gap-2">
             {supplier.name}
             {supplier.isReturns ? <Badge variant="outline">დაბრუნებული</Badge> : null}
+            {supplier.isCustomerReturns ? <Badge variant="outline">მაღაზიიდან გამოტანა</Badge> : null}
             {supplier.isArchived ? <Badge variant="secondary">სანაგვეში</Badge> : null}
           </span>
         }

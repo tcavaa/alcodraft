@@ -22,6 +22,8 @@ import {
   users,
 } from "@/server/db/schema";
 
+import { CUSTOMER_RETURNS_SUPPLIER } from "../sales/service";
+
 // ── Stores ──────────────────────────────────────────────────────────────────
 
 /** A new store gets everything the old copy-pasted table sets had, plus a cash book. */
@@ -34,6 +36,7 @@ export async function createStore(tx: Tx, actorId: number, input: { name: string
     .values({ name: input.name, sortOrder: maxOrder + 1 })
     .returning({ id: stores.id });
   await tx.insert(financeAccounts).values({ storeId: store.id, name: "ფინანსები", isDefault: true });
+  await tx.insert(suppliers).values({ storeId: store.id, name: CUSTOMER_RETURNS_SUPPLIER, isCustomerReturns: true });
   await audit(tx, {
     storeId: store.id,
     userId: actorId,

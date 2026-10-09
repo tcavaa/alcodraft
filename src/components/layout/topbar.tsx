@@ -16,7 +16,8 @@ export function Topbar() {
       <Separator orientation="vertical" className="mr-1 data-[orientation=vertical]:h-5" />
       <Button
         variant="outline"
-        className="h-9 w-full max-w-sm justify-start gap-2 bg-card text-muted-foreground shadow-none"
+        // min-w-0 + shrink: the button variant is shrink-0, which pushed it past a phone's edge.
+        className="h-9 w-full max-w-sm min-w-0 shrink justify-start gap-2 bg-card text-muted-foreground shadow-none"
         onClick={openCommandPalette}
       >
         <Search className="size-4" />

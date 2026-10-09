@@ -25,7 +25,6 @@ import {
   CUSTOMER_OPERATION_SORTS,
   getCustomer,
   getCustomerProductSummary,
-  getCustomerShelf,
   listCustomerCounts,
   listCustomerDeliveries,
 } from "@/features/customers/queries";
@@ -52,7 +51,7 @@ export default async function CustomerPage({
   if (!data) notFound();
   const { customer, stats, openOrders } = data;
   const sp = await searchParams;
-  const tab = enumParam(sp, "tab", ["summary", "leftover", "counts"] as const) ?? "operations";
+  const tab = enumParam(sp, "tab", ["summary", "counts"] as const) ?? "operations";
   const page = pageParam(sp);
   const pathname = storeHref(store.id, `customers/${customer.id}`);
 
@@ -191,7 +190,6 @@ export default async function CustomerPage({
           options={[
             { value: "operations", label: "ოპერაციები" },
             { value: "summary", label: "ყველა დღე ერთად" },
-            { value: "leftover", label: "ნაშთი" },
             { value: "counts", label: "განაშთვის ისტორია" },
           ]}
         />
@@ -203,8 +201,6 @@ export default async function CustomerPage({
         <OperationsTable storeId={store.id} customerId={customer.id} page={page} pathname={pathname} sp={sp} stats={stats} />
       ) : tab === "summary" ? (
         <ProductSummary customerId={customer.id} sp={sp} />
-      ) : tab === "leftover" ? (
-        <LeftoverSummary storeId={store.id} customerId={customer.id} sp={sp} />
       ) : (
         <CountHistory storeId={store.id} customerId={customer.id} sp={sp} />
       )}
@@ -357,83 +353,6 @@ async function ProductSummary({ customerId, sp }: { customerId: number; sp: Sear
     "ssort",
   );
   return <DocumentLinesTable rows={rows} total={sum(all.map((r) => r.total))} param="ssort" priceLabel="საშუალო ფასი" />;
-}
-
-const LEFTOVER_SORTS = ["name", "price", "quantity", "leftover"] as const;
-
-/**
- * „ნაშთი“ (new): per product Σ delivered and average price (as „ყველა დღე ერთად“) next to what the
- * latest „განაშთვა“ found on the shelf.
- */
-async function LeftoverSummary({ storeId, customerId, sp }: { storeId: number; customerId: number; sp: SearchParams }) {
-  const { latestCount, products } = await getCustomerShelf(customerId);
-  if (products.length === 0) {
-    return <p className="rounded-xl border border-dashed bg-card/50 p-10 text-center text-sm text-muted-foreground">მიწოდებული პროდუქცია არ არის.</p>;
-  }
-  const avg = (p: (typeof products)[number]) => (p.deliveredQty > 0 ? dec(p.deliveredTotal).div(p.deliveredQty) : dec(p.lastPrice));
-  const rows = sortRows(products, sortParam(sp, LEFTOVER_SORTS, "lsort"), {
-    name: (p) => p.name,
-    price: avg,
-    quantity: (p) => p.delivered,
-    leftover: (p) => p.leftover,
-  });
-  return (
-    <>
-      <p className="mb-3 text-sm text-muted-foreground">
-        {latestCount ? (
-          <>
-            ბოლო განაშთვა:{" "}
-            <Link href={storeHref(storeId, `operations/${latestCount.id}`)} className="font-medium text-foreground hover:underline">
-              {formatDate(latestCount.date)} (#{latestCount.number})
-            </Link>
-          </>
-        ) : (
-          "განაშთვა ჯერ არ ჩატარებულა — ნაშთი 0."
-        )}
-      </p>
-      <TableCard>
-        <Table>
-          <TableHeader>
-            <HeadRow>
-              <SortableHead column="name" param="lsort">
-                დასახელება
-              </SortableHead>
-              <SortableHead column="price" param="lsort" className="text-right">
-                საშუალო ფასი
-              </SortableHead>
-              <SortableHead column="quantity" param="lsort" className="text-right">
-                შეტანილი
-              </SortableHead>
-              <SortableHead column="leftover" param="lsort" className="text-right">
-                ნაშთი
-              </SortableHead>
-            </HeadRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((p) => (
-              <TableRow key={p.productId}>
-                <TableCell className="font-medium">{p.name}</TableCell>
-                <TableCell className="text-right">
-                  <Money value={avg(p)} />
-                </TableCell>
-                <TableCell className="text-right tabular-nums">{formatQty(p.delivered)}</TableCell>
-                <TableCell className="text-right font-medium tabular-nums">
-                  {p.leftover ? formatQty(p.leftover) : <span className="text-muted-foreground">0</span>}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-          <TableFooter>
-            <TableRow className="hover:bg-transparent">
-              <TableCell colSpan={2}>სულ</TableCell>
-              <TableCell className="text-right font-semibold tabular-nums">{formatQty(products.reduce((a, p) => a + p.delivered, 0))}</TableCell>
-              <TableCell className="text-right font-semibold tabular-nums">{formatQty(products.reduce((a, p) => a + p.leftover, 0))}</TableCell>
-            </TableRow>
-          </TableFooter>
-        </Table>
-      </TableCard>
-    </>
-  );
 }
 
 const COUNT_SORTS = ["date", "products", "leftover", "value"] as const;

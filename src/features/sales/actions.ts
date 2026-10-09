@@ -144,7 +144,7 @@ export async function createCountAction(storeId: number, payload: CountPayload) 
     await once(db, { key: data.requestId, action: "delivery.count", userId: actor.userId }, (tx) =>
       createCustomerCount(tx, actor, data),
     );
-    redirect(`${storeHref(storeId, `customers/${data.customerId}`)}?tab=leftover&counted=1`);
+    redirect(`${storeHref(storeId, `customers/${data.customerId}`)}?tab=counts&counted=1`);
   });
 }
 

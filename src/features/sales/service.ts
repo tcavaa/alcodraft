@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import { todayIso } from "@/lib/dates";
 import { type Decimal, dec, formatAmount, formatQty, sum, toDb } from "@/lib/money";
@@ -23,6 +23,7 @@ import {
   orderItems,
   orders,
   type products,
+  stockReceiptItems,
   stockReceipts,
   suppliers,
 } from "@/server/db/schema";
@@ -537,6 +538,33 @@ export async function createCustomerReturn(
   const lines = input.lines.filter((l) => l.quantity > 0);
   if (lines.length === 0) throw new ActionError("შეიყვანეთ გამოტანილი რაოდენობა მინიმუმ ერთ პროდუქტზე.");
   const total = sum(lines.map((l) => l.unitPrice.times(l.quantity)));
+
+  // No more can come back than the customer still has: Σ delivered − Σ taken back before.
+  // Locking the products serialises two returns of the same goods.
+  const productsById = await lockProducts(tx, actor.storeId, lines.map((l) => l.productId));
+  const ids = lines.map((l) => l.productId);
+  const deliveredRows = await tx
+    .select({ productId: deliveryItems.productId, qty: sql<number>`sum(${deliveryItems.quantity})::int` })
+    .from(deliveryItems)
+    .innerJoin(deliveries, eq(deliveries.id, deliveryItems.deliveryId))
+    .where(and(eq(deliveries.customerId, customer.id), eq(deliveries.kind, "delivery"), inArray(deliveryItems.productId, ids)))
+    .groupBy(deliveryItems.productId);
+  const returnedRows = await tx
+    .select({ productId: stockReceiptItems.productId, qty: sql<number>`sum(${stockReceiptItems.quantity})::int` })
+    .from(stockReceiptItems)
+    .innerJoin(stockReceipts, eq(stockReceipts.id, stockReceiptItems.receiptId))
+    .where(and(eq(stockReceipts.customerId, customer.id), inArray(stockReceiptItems.productId, ids)))
+    .groupBy(stockReceiptItems.productId);
+  const left = new Map(deliveredRows.map((r) => [r.productId, r.qty]));
+  for (const r of returnedRows) left.set(r.productId, (left.get(r.productId) ?? 0) - r.qty);
+  const over = lines.filter((l) => l.quantity > Math.max(left.get(l.productId) ?? 0, 0));
+  if (over.length) {
+    throw new ActionError(
+      `გამოტანა აღემატება კლიენტთან შეტანილს: ${over
+        .map((l) => `${productsById.get(l.productId)!.name} (შეტანილია ${Math.max(left.get(l.productId) ?? 0, 0)})`)
+        .join("; ")}`,
+    );
+  }
 
   const number = await nextNumber(tx, actor.storeId, "delivery");
   const [row] = await tx

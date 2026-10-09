@@ -340,8 +340,8 @@ async function ProductSummary({ customerId, sp }: { customerId: number; sp: Sear
     all.map((r) => ({
       key: r.productId,
       name: r.name,
-      // Average price = Σ line totals ÷ Σ delivered (old viewsum).
-      unitPrice: dec(r.total).div(r.quantity),
+      // Average price = Σ line totals ÷ Σ delivered (old viewsum), of the deliveries — returns don't move it.
+      unitPrice: dec(r.deliveredTotal).div(r.deliveredQty),
       quantity: r.quantity,
       leftover: r.leftover,
       gift: r.gift,
@@ -364,7 +364,7 @@ async function LeftoverSummary({ storeId, customerId, sp }: { storeId: number; c
   if (products.length === 0) {
     return <p className="rounded-xl border border-dashed bg-card/50 p-10 text-center text-sm text-muted-foreground">მიწოდებული პროდუქცია არ არის.</p>;
   }
-  const avg = (p: (typeof products)[number]) => (p.delivered > 0 ? dec(p.total).div(p.delivered) : dec(p.lastPrice));
+  const avg = (p: (typeof products)[number]) => (p.deliveredQty > 0 ? dec(p.deliveredTotal).div(p.deliveredQty) : dec(p.lastPrice));
   const rows = sortRows(products, sortParam(sp, LEFTOVER_SORTS, "lsort"), {
     name: (p) => p.name,
     price: avg,

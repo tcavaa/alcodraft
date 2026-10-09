@@ -529,6 +529,10 @@ describe.skipIf(!enabled)("money & stock flows (rolled back)", () => {
       // The receipt goes only together with its operation; deleting the operation undoes both.
       await failsInSavepoint(tx, (inner) => deleteReceipt(inner, actor, receipt.id));
       await failsInSavepoint(tx, (inner) => createCustomerReturn(inner, actor, { customerId: customer.id, lines: [], comment: "" }));
+      // No more than delivered (12) less taken back (2) can come back.
+      await failsInSavepoint(tx, (inner) =>
+        createCustomerReturn(inner, actor, { customerId: customer.id, lines: [{ productId: p1.id, unitPrice: dec(10), quantity: 11 }], comment: "" }),
+      );
       await deleteDelivery(tx, actor, ret.id, "return");
       expect([await stock(p1.id), await debt(customer.id)]).toEqual([38, "240"]);
       expect(await tx.select().from(s.stockReceipts).where(eq(s.stockReceipts.id, receipt.id))).toEqual([]);

@@ -7,8 +7,34 @@ import { db } from "@/server/db";
 import { countByArchived } from "@/server/db/archived";
 import { debtDelta, debtSum, debtSumOrZero, likePattern } from "@/server/db/expressions";
 import { by } from "@/server/db/order";
+import {
+  customers,
+  deliveries,
+  deliveryItems,
+  orders,
+  products,
+  stockReceiptItems,
+  stockReceipts,
+} from "@/server/db/schema";
+
 import { CUSTOMER_COLORS, type CustomerColor } from "./colors";
-import { customers, deliveries, deliveryItems, orders, products } from "@/server/db/schema";
+
+/**
+ * Goods taken back from the customer („პროდუქციის გამოტანა“) per product: they live on the
+ * return's stock receipt, and come off what the customer was delivered.
+ */
+const returnedByProduct = (customerId: number) =>
+  db
+    .select({
+      productId: stockReceiptItems.productId,
+      quantity: sql<number>`sum(${stockReceiptItems.quantity})::int`.as("returned_qty"),
+      value: sql<string>`sum(${stockReceiptItems.quantity} * ${stockReceiptItems.unitCost})`.as("returned_value"),
+    })
+    .from(stockReceiptItems)
+    .innerJoin(stockReceipts, eq(stockReceipts.id, stockReceiptItems.receiptId))
+    .where(eq(stockReceipts.customerId, customerId))
+    .groupBy(stockReceiptItems.productId)
+    .as("returned");
 
 
 export const CUSTOMER_SORTS = ["color", "id", "name", "comment", "debt", "last"] as const;
@@ -200,24 +226,34 @@ export async function listCustomerDeliveries(
 /**
  * Old "ყველა დღე ერთად" (distribution/viewsum): totals per product over every
  * operation of the customer; average price = Σ line totals ÷ Σ delivered.
+ * New: goods taken back („გამოტანა“) come off delivered and the line totals; the average price
+ * stays the one of the deliveries (`deliveredQty`, `deliveredTotal`).
  */
 export async function getCustomerProductSummary(customerId: number) {
+  const returned = returnedByProduct(customerId);
+  const deliveredQty = sql<number>`sum(${deliveryItems.quantity})::int`;
+  const deliveredTotal = sql<string>`sum(${deliveryItems.lineTotal})`;
+  // One `returned` row per product, repeated on each of its lines — hence max(), not sum().
+  const total = sql<string>`sum(${deliveryItems.lineTotal}) - coalesce(max(${returned.value}), 0)`;
   const rows = await db
     .select({
       productId: products.id,
       name: products.name,
-      quantity: sql<number>`sum(${deliveryItems.quantity})::int`,
+      quantity: sql<number>`(sum(${deliveryItems.quantity}) - coalesce(max(${returned.quantity}), 0))::int`,
       leftover: sql<number>`sum(${deliveryItems.leftoverQty})::int`,
       gift: sql<number>`sum(${deliveryItems.giftQty})::int`,
-      total: sql<string>`sum(${deliveryItems.lineTotal})`,
+      total,
+      deliveredQty,
+      deliveredTotal,
     })
     .from(deliveryItems)
     .innerJoin(deliveries, eq(deliveries.id, deliveryItems.deliveryId))
     .innerJoin(products, eq(products.id, deliveryItems.productId))
+    .leftJoin(returned, eq(returned.productId, products.id))
     .where(eq(deliveries.customerId, customerId))
     .groupBy(products.id)
     .having(sql`sum(${deliveryItems.quantity}) > 0`)
-    .orderBy(desc(sql`sum(${deliveryItems.lineTotal})`));
+    .orderBy(desc(total));
   return rows;
 }
 
@@ -244,13 +280,17 @@ export async function getLatestCount(customerId: number) {
 
 /**
  * Every product the customer has been delivered (plus anything in the latest count), for the
- * „ნაშთი“ tab and the count / return forms: Σ delivered, average price (Σ line totals ÷ Σ
- * delivered, as „ყველა დღე ერთად“), the last price charged and the leftover of the latest count.
+ * „ნაშთი“ tab and the count / return forms: Σ delivered less what was taken back, the deliveries'
+ * own totals for the average price (Σ line totals ÷ Σ delivered, as „ყველა დღე ერთად“), the last
+ * price charged and the leftover of the latest count.
  */
 export async function getCustomerShelf(customerId: number) {
   const latest = await getLatestCount(customerId);
+  const returned = returnedByProduct(customerId);
   const isDelivery = sql`${deliveries.kind} = 'delivery'`;
-  const delivered = sql<number>`coalesce(sum(${deliveryItems.quantity}) filter (where ${isDelivery}), 0)::int`;
+  const deliveredQty = sql<number>`coalesce(sum(${deliveryItems.quantity}) filter (where ${isDelivery}), 0)::int`;
+  // One `returned` row per product, repeated on each of its lines — hence max(), not sum().
+  const returnedQty = sql<number>`coalesce(max(${returned.quantity}), 0)::int`;
   const leftover = latest
     ? sql<number>`coalesce(sum(${deliveryItems.leftoverQty}) filter (where ${deliveries.id} = ${latest.id}), 0)::int`
     : sql<number>`0`;
@@ -260,17 +300,22 @@ export async function getCustomerShelf(customerId: number) {
       name: products.name,
       isActive: products.isActive,
       isArchived: products.isArchived,
-      delivered,
-      total: sql<string>`coalesce(sum(${deliveryItems.lineTotal}) filter (where ${isDelivery}), 0)`,
+      /** Σ delivered less what was taken back. */
+      delivered: sql<number>`(${deliveredQty} - ${returnedQty})::int`,
+      returned: returnedQty,
+      /** Of the deliveries only: the average price ignores returns. */
+      deliveredQty,
+      deliveredTotal: sql<string>`coalesce(sum(${deliveryItems.lineTotal}) filter (where ${isDelivery}), 0)`,
       lastPrice: sql<string | null>`(array_agg(${deliveryItems.unitPrice} order by ${deliveries.id} desc) filter (where ${isDelivery} and ${deliveryItems.quantity} > 0))[1]`,
       leftover,
     })
     .from(deliveryItems)
     .innerJoin(deliveries, eq(deliveries.id, deliveryItems.deliveryId))
     .innerJoin(products, eq(products.id, deliveryItems.productId))
+    .leftJoin(returned, eq(returned.productId, products.id))
     .where(eq(deliveries.customerId, customerId))
     .groupBy(products.id)
-    .having(sql`${delivered} > 0 or ${leftover} > 0`)
+    .having(sql`${deliveredQty} > 0 or ${leftover} > 0`)
     .orderBy(asc(products.name));
   return {
     latestCount: latest,

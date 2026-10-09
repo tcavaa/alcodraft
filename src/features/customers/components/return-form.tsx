@@ -24,6 +24,7 @@ export interface ReturnProduct {
   name: string;
   /** Last price the customer was charged — the default return price. */
   lastPrice: string;
+  /** Σ delivered less earlier returns: the most that can come back. */
   delivered: number;
   isActive: boolean;
 }
@@ -75,8 +76,10 @@ export function ReturnForm({
       const n = qty(p);
       return n === null || n < 0 || (n > 0 && !price(p));
     });
+    const tooMany = lines.find((p) => (qty(p) ?? 0) > p.delivered);
     const next: Record<string, string> = {};
     if (bad) next._form = `შეასწორეთ ველები: ${bad.name}`;
+    else if (tooMany) next._form = `${tooMany.name}: გამოტანა აღემატება შეტანილს (${formatQty(tooMany.delivered)}).`;
     else if (lines.length === 0) next._form = "შეიყვანეთ გამოტანილი რაოდენობა მინიმუმ ერთ პროდუქტზე.";
     setErrors(next);
     if (next._form) toast.error(next._form);
@@ -135,8 +138,11 @@ export function ReturnForm({
                       inputMode="numeric"
                       placeholder="0"
                       aria-label={`${p.name} — რაოდენობა`}
-                      aria-invalid={n === null || (n ?? 0) < 0}
-                      className="h-8 px-2 text-right tabular-nums placeholder:text-muted-foreground/40"
+                      aria-invalid={n === null || (n ?? 0) < 0 || (n ?? 0) > p.delivered}
+                      className={cn(
+                        "h-8 px-2 text-right tabular-nums placeholder:text-muted-foreground/40",
+                        (n ?? 0) > p.delivered && "border-destructive text-destructive",
+                      )}
                     />
                   </td>
                   <td className="px-3 py-1.5 text-right font-medium tabular-nums">

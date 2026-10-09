@@ -122,6 +122,20 @@ export async function setProductArchived(tx: Tx, actor: Actor, productId: number
   });
 }
 
+export async function setProductActive(tx: Tx, actor: Actor, productId: number, active: boolean) {
+  const product = (await lockProducts(tx, actor.storeId, [productId])).get(productId)!;
+  if (product.isActive === active) return;
+  await tx.update(products).set({ isActive: active }).where(eq(products.id, productId));
+  await audit(tx, {
+    storeId: actor.storeId,
+    userId: actor.userId,
+    action: active ? "product.activate" : "product.deactivate",
+    entityType: "product",
+    entityId: productId,
+    summary: `${product.name} ${active ? "გააქტიურდა" : "გახდა არააქტიური"}`,
+  });
+}
+
 /**
  * Inventory count: sets the stock to what is physically there, with a reason. `expectedQty` is the
  * stock the dialog showed; if goods came in or went out since, the count is refused so the person

@@ -43,6 +43,12 @@ export const products = app
       purchasePrice: money().notNull().default("0"),
       stockQty: integer().notNull().default(0),
       comment: text().notNull().default(""),
+      /**
+       * Inactive (new): stays in the product list but can't be put on a new operation, order or
+       * receipt and is left out of the dashboard statistics. Saved documents keep it. Trash
+       * (`isArchived`) hides the product everywhere.
+       */
+      isActive: boolean().notNull().default(true),
       isArchived: boolean().notNull().default(false),
       legacyId: integer(),
       ...timestamps(),

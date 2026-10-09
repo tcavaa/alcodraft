@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, desc, eq, ilike, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, lte, sql, type SQL } from "drizzle-orm";
 
 import { db } from "@/server/db";
 import { countByArchived } from "@/server/db/archived";
@@ -20,10 +20,15 @@ import {
 
 
 /** Old drinks/index (+ the "ცვლილება" flag without one query per row). */
-export async function listProducts(storeId: number, p: { q?: string; archived: boolean; supplierId?: number }) {
+export async function listProducts(
+  storeId: number,
+  p: { q?: string; archived: boolean; supplierId?: number; active?: boolean; outOfStock?: boolean },
+) {
   const conditions: (SQL | undefined)[] = [eq(products.storeId, storeId), eq(products.isArchived, p.archived)];
   if (p.q) conditions.push(ilike(products.name, likePattern(p.q)));
   if (p.supplierId) conditions.push(eq(products.supplierId, p.supplierId));
+  if (p.active !== undefined) conditions.push(eq(products.isActive, p.active));
+  if (p.outOfStock) conditions.push(lte(products.stockQty, 0));
   return db
     .select({
       id: products.id,
@@ -33,6 +38,7 @@ export async function listProducts(storeId: number, p: { q?: string; archived: b
       stockQty: products.stockQty,
       supplierId: products.supplierId,
       supplierName: suppliers.name,
+      isActive: products.isActive,
       priceChanged: sql<boolean>`exists (select 1 from ${productPriceChanges} where ${productPriceChanges.productId} = ${products.id})`,
     })
     .from(products)

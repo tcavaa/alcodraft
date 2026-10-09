@@ -22,12 +22,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FilterTabs } from "@/components/data/filter-tabs";
 import { MonthlyBars } from "@/features/dashboard/monthly-bars";
+import { RankBadge } from "@/features/dashboard/rank-badge";
 import {
   getMonthlySales,
   getOutOfStock,
   getRecentDeliveries,
   getStoreKpis,
-  getTopDebtors,
+  getTopCustomers,
   getTopProducts,
 } from "@/features/dashboard/queries";
 import { TOP_PERIOD_VALUES, TOP_PERIODS } from "@/features/dashboard/top-periods";
@@ -35,7 +36,6 @@ import { OPERATION_KIND_LABEL, operationKind } from "@/features/sales/labels";
 import { formatDate, formatMonth, todayIso } from "@/lib/dates";
 import { formatQty } from "@/lib/money";
 import { enumParam } from "@/lib/search-params";
-import { cn } from "@/lib/utils";
 import { requireStore } from "@/server/auth/dal";
 
 export const metadata: Metadata = { title: "დაფა" };
@@ -45,18 +45,22 @@ export default async function StoreDashboardPage({ params, searchParams }: PageP
   const { store } = await requireStore(storeId);
   const sp = await searchParams;
   const topPeriod = enumParam(sp, "top", TOP_PERIOD_VALUES) ?? "30d";
+  const clientsPeriod = enumParam(sp, "clients", TOP_PERIOD_VALUES) ?? "30d";
   const today = todayIso();
-  const [kpisMap, monthly, recent, debtors, outOfStock, topProducts] = await Promise.all([
+  const [kpisMap, monthly, recent, topCustomers, outOfStock, topProducts] = await Promise.all([
     getStoreKpis([store.id], today),
     getMonthlySales(store.id, today),
     getRecentDeliveries(store.id),
-    getTopDebtors(store.id),
+    getTopCustomers(store.id, today, clientsPeriod, 8),
     getOutOfStock(store.id),
     getTopProducts(store.id, today, topPeriod, 8),
   ]);
   const kpis = kpisMap.get(store.id)!;
   const href = (segment: string) => storeHref(store.id, segment);
-  const topHref = `${href("top-products")}${topPeriod === "30d" ? "" : `?period=${topPeriod}`}`;
+  const withPeriod = (path: string, period: string) => `${href(path)}${period === "30d" ? "" : `?period=${period}`}`;
+  const topHref = withPeriod("top-products", topPeriod);
+  const clientsHref = withPeriod("top-customers", clientsPeriod);
+  const periodTabs = TOP_PERIODS.map((p) => ({ value: p.value, label: p.label }));
 
   return (
     <>
@@ -159,7 +163,7 @@ export default async function StoreDashboardPage({ params, searchParams }: PageP
                 searchParams={sp}
                 param="top"
                 value={topPeriod}
-                options={TOP_PERIODS.map((p) => ({ value: p.value, label: p.label }))}
+                options={periodTabs}
               />
             </div>
             {topProducts.length === 0 ? (
@@ -171,14 +175,7 @@ export default async function StoreDashboardPage({ params, searchParams }: PageP
                   href={href(`products/${p.id}`)}
                   className="flex items-center gap-3 rounded-lg px-2 py-1.5 text-sm hover:bg-muted"
                 >
-                  <span
-                    className={cn(
-                      "flex size-5 shrink-0 items-center justify-center rounded-full text-[0.7rem] font-semibold tabular-nums",
-                      i < 3 ? "bg-gold/20 text-gold-strong" : "bg-muted text-muted-foreground",
-                    )}
-                  >
-                    {i + 1}
-                  </span>
+                  <RankBadge rank={i + 1} />
                   <span className="min-w-0 flex-1 truncate">{p.name}</span>
                   <span className="shrink-0 text-right tabular-nums">
                     <span className="font-medium">{formatQty(p.quantity)} ც.</span>
@@ -203,27 +200,34 @@ export default async function StoreDashboardPage({ params, searchParams }: PageP
         <Card>
           <CardHeader className="flex-row items-center justify-between">
             <div>
-              <CardTitle>ყველაზე დიდი ვალი</CardTitle>
-              <CardDescription>აქტიური კლიენტები</CardDescription>
+              <CardTitle className="flex items-center gap-2">
+                <HandCoins className="size-4 text-gold-strong" />
+                კლიენტები — ანალიტიკა
+              </CardTitle>
+              <CardDescription>ვისგან მივიღეთ ყველაზე მეტი თანხა</CardDescription>
             </div>
             <Button variant="ghost" size="sm" asChild>
-              <Link href={`${href("customers")}?sort=-debt`}>
-                ყველა <ArrowRight />
+              <Link href={clientsHref}>
+                ყველას ნახვა <ArrowRight />
               </Link>
             </Button>
           </CardHeader>
           <CardContent className="space-y-1">
-            {debtors.length === 0 ? (
-              <p className="text-sm text-muted-foreground">ვალიანი კლიენტი არ არის.</p>
+            <div className="mb-2">
+              <FilterTabs pathname={href("")} searchParams={sp} param="clients" value={clientsPeriod} options={periodTabs} />
+            </div>
+            {topCustomers.length === 0 ? (
+              <p className="px-2 text-sm text-muted-foreground">ამ პერიოდში თანხა არ მიგვიღია.</p>
             ) : (
-              debtors.map((c) => (
+              topCustomers.map((c, i) => (
                 <Link
                   key={c.id}
                   href={href(`customers/${c.id}`)}
-                  className="flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-sm hover:bg-muted"
+                  className="flex items-center gap-3 rounded-lg px-2 py-1.5 text-sm hover:bg-muted"
                 >
-                  <span className="truncate">{c.name}</span>
-                  <Money value={c.debt} tone="debt" className="font-medium" />
+                  <RankBadge rank={i + 1} />
+                  <span className="min-w-0 flex-1 truncate">{c.name}</span>
+                  <Money value={c.received} currency className="shrink-0 font-medium" />
                 </Link>
               ))
             )}
@@ -231,11 +235,16 @@ export default async function StoreDashboardPage({ params, searchParams }: PageP
         </Card>
 
         <Card>
-          <CardHeader>
+          <CardHeader className="flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2">
               <PackageX className="size-4 text-destructive" />
               მარაგი ამოწურულია
             </CardTitle>
+            <Button variant="ghost" size="sm" asChild>
+              <Link href={`${href("products")}?status=active&stock=out&sort=stock`}>
+                ყველა <ArrowRight />
+              </Link>
+            </Button>
           </CardHeader>
           <CardContent className="space-y-1">
             {outOfStock.length === 0 ? (

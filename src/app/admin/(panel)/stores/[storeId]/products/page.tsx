@@ -17,7 +17,7 @@ import { ProductRowMenu } from "@/features/products/components/product-row-menu"
 import { countProducts, listProducts, listSupplierOptions } from "@/features/products/queries";
 import { dec, formatQty } from "@/lib/money";
 import { storeHref } from "@/lib/routes";
-import { intParam, param, sortParam } from "@/lib/search-params";
+import { enumParam, intParam, param, sortParam } from "@/lib/search-params";
 import { sortRows } from "@/lib/sort";
 import { cn } from "@/lib/utils";
 import { requireStore } from "@/server/auth/dal";
@@ -32,8 +32,16 @@ export default async function ProductsPage({ params, searchParams }: PageProps<"
   const sp = await searchParams;
   const archived = param(sp, "archived") === "1";
   const supplierId = intParam(sp, "supplier");
+  const status = enumParam(sp, "status", ["active", "inactive"] as const);
+  const stock = enumParam(sp, "stock", ["out"] as const);
   const [list, counts, suppliers] = await Promise.all([
-    listProducts(store.id, { q: param(sp, "q"), archived, supplierId }),
+    listProducts(store.id, {
+      q: param(sp, "q"),
+      archived,
+      supplierId,
+      active: status ? status === "active" : undefined,
+      outOfStock: stock === "out",
+    }),
     countProducts(store.id),
     listSupplierOptions(store.id),
   ]);
@@ -75,13 +83,38 @@ export default async function ProductsPage({ params, searchParams }: PageProps<"
           <SearchInput placeholder="ჩაწერე დასახელება…" />
           <ArchivedTabs pathname={pathname} searchParams={sp} archived={archived} counts={counts} />
         </div>
-        <ParamSelect
-          param="supplier"
-          value={supplierId ? String(supplierId) : "all"}
-          label="მომწოდებელი"
-          className="w-64"
-          options={[{ value: "all", label: "ყველა" }, ...suppliers.map((s) => ({ value: String(s.id), label: s.name }))]}
-        />
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          {archived ? null : (
+            <ParamSelect
+              param="status"
+              value={status ?? "all"}
+              label="სტატუსი"
+              className="w-40"
+              options={[
+                { value: "all", label: "ყველა" },
+                { value: "active", label: "აქტიური" },
+                { value: "inactive", label: "არააქტიური" },
+              ]}
+            />
+          )}
+          <ParamSelect
+            param="stock"
+            value={stock ?? "all"}
+            label="მარაგი"
+            className="w-40"
+            options={[
+              { value: "all", label: "ყველა" },
+              { value: "out", label: "ამოწურული" },
+            ]}
+          />
+          <ParamSelect
+            param="supplier"
+            value={supplierId ? String(supplierId) : "all"}
+            label="მომწოდებელი"
+            className="w-64"
+            options={[{ value: "all", label: "ყველა" }, ...suppliers.map((s) => ({ value: String(s.id), label: s.name }))]}
+          />
+        </div>
       </div>
       {rows.length === 0 ? (
         <EmptyState icon={Boxes} title="პროდუქცია ვერ მოიძებნა" />
@@ -108,11 +141,16 @@ export default async function ProductsPage({ params, searchParams }: PageProps<"
             </TableHeader>
             <TableBody>
               {rows.map((p) => (
-                <TableRow key={p.id}>
+                <TableRow key={p.id} className={cn(!p.isActive && "text-muted-foreground")}>
                   <TableCell>
                     <Link href={storeHref(store.id, `products/${p.id}`)} className="font-medium hover:underline">
                       {p.name}
                     </Link>
+                    {!p.isActive ? (
+                      <Badge variant="outline" className="ml-2 align-middle text-[0.7rem]">
+                        არააქტიური
+                      </Badge>
+                    ) : null}
                     {p.supplierName ? <div className="text-xs text-muted-foreground">{p.supplierName}</div> : null}
                   </TableCell>
                   <TableCell className={cn("text-right font-medium tabular-nums", p.stockQty <= 0 && "text-destructive")}>
@@ -133,6 +171,7 @@ export default async function ProductsPage({ params, searchParams }: PageProps<"
                       productId={p.id}
                       name={p.name}
                       archived={archived}
+                      active={p.isActive}
                       canDelete={user.role === "super_admin"}
                     />
                   </TableCell>

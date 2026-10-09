@@ -51,12 +51,14 @@ export default async function ProductPage({ params, searchParams }: PageProps<"/
               <Badge variant="secondary" className="gap-1">
                 <Archive className="size-3" /> სანაგვეში
               </Badge>
+            ) : !p.isActive ? (
+              <Badge variant="outline">არააქტიური</Badge>
             ) : null}
           </span>
         }
         description={data.supplierName ?? "მომწოდებლის გარეშე"}
         actions={
-          <ProductRowMenu storeId={store.id} productId={p.id} name={p.name} archived={p.isArchived} canDelete={user.role === "super_admin"} />
+          <ProductRowMenu storeId={store.id} productId={p.id} name={p.name} archived={p.isArchived} active={p.isActive} canDelete={user.role === "super_admin"} />
         }
       />
       {param(sp, "created") ? <Notice>პროდუქტი დაემატა. მარაგის დასამატებლად გამოიყენეთ „მიღება“.</Notice> : null}

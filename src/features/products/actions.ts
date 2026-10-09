@@ -14,6 +14,7 @@ import {
   adjustProductStock,
   createProduct,
   deleteProduct,
+  setProductActive,
   setProductArchived,
   updateProduct,
 } from "../catalog/service";
@@ -62,6 +63,18 @@ export async function setProductArchivedAction(storeId: number, productId: numbe
       refresh();
     },
     archived === true ? "პროდუქტი გადავიდა სანაგვეში" : "პროდუქტი აღდგა",
+  );
+}
+
+export async function setProductActiveAction(storeId: number, productId: number, active: boolean) {
+  return runAction(
+    async () => {
+      const { actor } = await authorizeStore(storeId);
+      const value = parseInput(z.boolean(), active);
+      await db.transaction((tx) => setProductActive(tx, actor, productId, value));
+      refresh();
+    },
+    active === true ? "პროდუქტი გააქტიურდა" : "პროდუქტი გახდა არააქტიური",
   );
 }
 

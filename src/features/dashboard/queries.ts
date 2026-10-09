@@ -135,24 +135,13 @@ export async function getRecentDeliveries(storeId: number, limit = 8) {
     .limit(limit);
 }
 
-export async function getTopDebtors(storeId: number, limit = 6) {
-  const debt = debtSum;
-  return db
-    .select({ id: customers.id, name: customers.name, color: customers.color, debt })
-    .from(deliveries)
-    .innerJoin(customers, eq(customers.id, deliveries.customerId))
-    .where(and(eq(deliveries.storeId, storeId), eq(customers.isArchived, false)))
-    .groupBy(customers.id)
-    .having(sql`${debt} > 0`)
-    .orderBy(desc(debt))
-    .limit(limit);
-}
-
 export async function getOutOfStock(storeId: number, limit = 8) {
   return db
     .select({ id: products.id, name: products.name, stock: products.stockQty })
     .from(products)
-    .where(and(eq(products.storeId, storeId), eq(products.isArchived, false), lte(products.stockQty, 0)))
+    .where(
+      and(eq(products.storeId, storeId), eq(products.isArchived, false), eq(products.isActive, true), lte(products.stockQty, 0)),
+    )
     .orderBy(asc(products.stockQty), asc(products.name))
     .limit(limit);
 }
@@ -168,7 +157,6 @@ export async function getTopProducts(storeId: number, today: string, period: Top
       id: products.id,
       name: products.name,
       stock: products.stockQty,
-      isArchived: products.isArchived,
       quantity,
       gifts: sql<number>`sum(${deliveryItems.giftQty})::int`,
       total: sql<string>`sum(${deliveryItems.lineTotal})`,
@@ -176,10 +164,53 @@ export async function getTopProducts(storeId: number, today: string, period: Top
     .from(deliveryItems)
     .innerJoin(deliveries, eq(deliveries.id, deliveryItems.deliveryId))
     .innerJoin(products, eq(products.id, deliveryItems.productId))
-    .where(and(eq(deliveries.storeId, storeId), gte(deliveries.deliveryDate, topPeriodStart(today, period))))
+    .where(
+      and(
+        eq(deliveries.storeId, storeId),
+        gte(deliveries.deliveryDate, topPeriodStart(today, period)),
+        // Statistics leave out inactive and trashed products.
+        eq(products.isActive, true),
+        eq(products.isArchived, false),
+      ),
+    )
     .groupBy(products.id)
     .having(sql`sum(${deliveryItems.quantity}) > 0`)
     .orderBy(desc(quantity), asc(products.name))
+    .$dynamic();
+  return limit ? query.limit(limit) : query;
+}
+
+/**
+ * Customers by money received in the period („აღებული თანხა“, cash and card — „დაბრუნება“
+ * (`back`) is settled with returned goods, not money). Also their sales in the period and current
+ * debt. No `limit` = every customer who paid something.
+ */
+export async function getTopCustomers(storeId: number, today: string, period: TopPeriod, limit?: number) {
+  const debts = db
+    .select({ customerId: deliveries.customerId, debt: debtSum.as("debt") })
+    .from(deliveries)
+    .where(eq(deliveries.storeId, storeId))
+    .groupBy(deliveries.customerId)
+    .as("debts");
+  const received = sql<string>`coalesce(sum(${deliveries.paidAmount}) filter (where ${deliveries.paymentMethod} is distinct from 'back'), 0)`;
+  const query = db
+    .select({
+      id: customers.id,
+      name: customers.name,
+      address: customers.address,
+      isArchived: customers.isArchived,
+      received,
+      sales: sql<string>`coalesce(sum(${deliveries.totalAmount}), 0)`,
+      operations: sql<number>`(count(*) filter (where ${deliveries.kind} = 'delivery' and ${deliveries.totalAmount} <> 0))::int`,
+      debt: sql<string>`coalesce(max(${debts.debt}), 0)`,
+    })
+    .from(deliveries)
+    .innerJoin(customers, eq(customers.id, deliveries.customerId))
+    .leftJoin(debts, eq(debts.customerId, customers.id))
+    .where(and(eq(deliveries.storeId, storeId), gte(deliveries.deliveryDate, topPeriodStart(today, period))))
+    .groupBy(customers.id)
+    .having(sql`${received} > 0`)
+    .orderBy(desc(received), asc(customers.name))
     .$dynamic();
   return limit ? query.limit(limit) : query;
 }

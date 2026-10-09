@@ -9,6 +9,7 @@ import { audit } from "@/server/audit";
 import type { Tx } from "@/server/db";
 import {
   applyStockDeltas,
+  assertProductsAvailable,
   customerDebt,
   defaultAccountId,
   lockProducts,
@@ -80,13 +81,6 @@ function itemValues(line: ComputedLine) {
   };
 }
 
-function assertNotArchived(lines: { productId: number }[], productsById: Map<number, Product>, message: string) {
-  const archived = [...new Set(lines.map((l) => l.productId))].filter((id) => productsById.get(id)?.isArchived);
-  if (archived.length) {
-    throw new ActionError(`${message}: ${archived.map((id) => productsById.get(id)!.name).join(", ")}`);
-  }
-}
-
 /** Old add-form rule: „შეტანილი“ may not exceed the stock on hand (gifts are not checked). */
 function assertStock(wanted: Map<number, number>, productsById: Map<number, Product>) {
   const short = [...wanted].filter(([id, qty]) => qty > 0 && qty > productsById.get(id)!.stockQty);
@@ -145,7 +139,7 @@ async function insertDelivery(tx: Tx, actor: Actor, args: InsertDeliveryArgs) {
     args.lines.map((l) => l.productId),
   );
 
-  if (args.requireActiveProducts) assertNotArchived(args.lines, productsById, "არქივირებული პროდუქტი");
+  if (args.requireActiveProducts) assertProductsAvailable(args.lines, productsById, "არააქტიური ან სანაგვეში მყოფი პროდუქტი");
   if (args.enforceStock) {
     const wanted = new Map<number, number>();
     for (const l of args.lines) if (l.quantity > 0) wanted.set(l.productId, (wanted.get(l.productId) ?? 0) + l.quantity);
@@ -317,10 +311,10 @@ export async function updateDelivery(tx: Tx, actor: Actor, deliveryId: number, i
 
   const { deltas, productsById } = await lockEditProducts(tx, actor, plan);
   const before = new Set(stored.map((r) => r.productId));
-  assertNotArchived(
+  assertProductsAvailable(
     plan.add.filter((l) => !before.has(l.productId)),
     productsById,
-    "არქივირებულ პროდუქტს ვერ დაამატებთ",
+    "არააქტიურ ან სანაგვეში მყოფ პროდუქტს ვერ დაამატებთ",
   );
   // Only what the edit delivers on top of the saved operation must be in stock.
   const increase = new Map<number, number>();
@@ -484,7 +478,7 @@ export async function createOrder(tx: Tx, actor: Actor, input: OrderInput) {
   const lines = computeLines(input.lines, input.discountFactor);
   if (lines.length === 0) throw new ActionError("შეკვეთაში არცერთი პროდუქტი არ არის.");
   const productsById = await lockProducts(tx, actor.storeId, lines.map((l) => l.productId));
-  assertNotArchived(lines, productsById, "შეკვეთაში არქივირებული პროდუქტია");
+  assertProductsAvailable(lines, productsById, "შეკვეთაში არააქტიური ან სანაგვეში მყოფი პროდუქტია");
 
   const total = totalOf(lines);
   // Old rule: debt shown on the order = customer's current debt (or the order total for a first order).
@@ -558,10 +552,10 @@ export async function updateOrder(tx: Tx, actor: Actor, orderId: number, input: 
   // Orders don't move stock; the lock only keeps products from changing store/archive state meanwhile.
   const { productsById } = await lockEditProducts(tx, actor, plan);
   const before = new Set(stored.map((r) => r.productId));
-  assertNotArchived(
+  assertProductsAvailable(
     plan.add.filter((l) => !before.has(l.productId)),
     productsById,
-    "არქივირებულ პროდუქტს ვერ დაამატებთ",
+    "არააქტიურ ან სანაგვეში მყოფ პროდუქტს ვერ დაამატებთ",
   );
 
   if (plan.remove.length) await tx.delete(orderItems).where(inArray(orderItems.id, plan.remove.map((r) => r.id)));

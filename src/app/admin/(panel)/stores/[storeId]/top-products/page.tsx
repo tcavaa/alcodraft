@@ -8,9 +8,9 @@ import { HeadRow, TableCard } from "@/components/data/table-card";
 import { EmptyState } from "@/components/empty-state";
 import { Money } from "@/components/money";
 import { PageHeader } from "@/components/page-header";
-import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getTopProducts } from "@/features/dashboard/queries";
+import { RankBadge } from "@/features/dashboard/rank-badge";
 import { TOP_PERIOD_VALUES, TOP_PERIODS, topPeriodStart } from "@/features/dashboard/top-periods";
 import { formatDate, todayIso } from "@/lib/dates";
 import { dec, formatQty, sum } from "@/lib/money";
@@ -24,7 +24,7 @@ export const metadata: Metadata = { title: "ყველაზე გაყი�
 
 const SORTS = ["rank", "name", "quantity", "gifts", "total", "stock"] as const;
 
-/** Every product sold in the period, ranked by units delivered (the dashboard card shows the top 8). */
+/** Every active product sold in the period, ranked by units delivered (the dashboard card shows the top 8). */
 export default async function TopProductsPage({ params, searchParams }: PageProps<"/admin/stores/[storeId]/top-products">) {
   const { storeId } = await params;
   const { store } = await requireStore(storeId);
@@ -95,24 +95,12 @@ export default async function TopProductsPage({ params, searchParams }: PageProp
               {rows.map((p) => (
                 <TableRow key={p.id}>
                   <TableCell>
-                    <span
-                      className={cn(
-                        "flex size-6 items-center justify-center rounded-full text-xs font-semibold tabular-nums",
-                        p.rank <= 3 ? "bg-gold/20 text-gold-strong" : "bg-muted text-muted-foreground",
-                      )}
-                    >
-                      {p.rank}
-                    </span>
+                    <RankBadge rank={p.rank} className="size-6 text-xs" />
                   </TableCell>
                   <TableCell>
                     <Link href={storeHref(store.id, `products/${p.id}`)} className="font-medium hover:underline">
                       {p.name}
                     </Link>
-                    {p.isArchived ? (
-                      <Badge variant="outline" className="ml-2 align-middle text-[0.7rem]">
-                        არქივში
-                      </Badge>
-                    ) : null}
                   </TableCell>
                   <TableCell className="text-right font-medium tabular-nums">{formatQty(p.quantity)}</TableCell>
                   <TableCell className="hidden text-right text-muted-foreground tabular-nums md:table-cell">

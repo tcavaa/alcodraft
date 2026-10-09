@@ -84,6 +84,24 @@ export async function lockProducts(tx: Tx, storeId: number, productIds: number[]
   return new Map(rows.map((r) => [r.id, r]));
 }
 
+/**
+ * New lines may only use products that can be sold: not in the trash and not marked inactive.
+ * Saved documents keep such products (callers pass only the lines being added).
+ */
+export function assertProductsAvailable(
+  lines: { productId: number }[],
+  productsById: Map<number, typeof products.$inferSelect>,
+  message: string,
+) {
+  const unavailable = [...new Set(lines.map((l) => l.productId))].filter((id) => {
+    const p = productsById.get(id);
+    return p && (p.isArchived || !p.isActive);
+  });
+  if (unavailable.length) {
+    throw new ActionError(`${message}: ${unavailable.map((id) => productsById.get(id)!.name).join(", ")}`);
+  }
+}
+
 /** Applies stock changes (delta per product id; negative = out of the warehouse). */
 export async function applyStockDeltas(tx: Tx, deltas: Map<number, number>): Promise<void> {
   for (const [productId, delta] of deltas) {

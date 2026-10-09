@@ -168,7 +168,7 @@ export function LinesEditor({
                   className={cn(
                     "border-b transition-colors last:border-0",
                     filled ? "bg-accent/50" : "hover:bg-muted/40",
-                    p.isArchived && "opacity-60",
+                    (p.isArchived || !p.isActive) && "opacity-60",
                   )}
                 >
                   <td className="px-3 py-1.5">

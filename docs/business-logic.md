@@ -117,6 +117,20 @@ The order form warns (doesn't block) when a quantity exceeds stock — stock may
   can't silently wipe that movement.
 - Hard delete (super admin) only for products that never appeared anywhere; suppliers only without
   receipts **and** payments.
+- Active / inactive „არააქტიური“ (new, `is_active`): an inactive product stays in the product list
+  (filter „სტატუსი“) but is hidden from the operation, order and receipt forms, refused by those
+  services for new lines, and left out of the dashboard statistics (best sellers, out of stock).
+  Saved operations and orders keep it — an open order with it can still be edited and completed.
+  The trash („სანაგვე“) hides a product the same way and also from the main list.
+
+## Dashboard — „დაფა“
+
+- Best sellers: Σ delivered („შეტანილი“, gifts not ranked) per product over the last 30 days /
+  6 months / 1 year (today included), active products only. The card shows 8; `top-products` lists all.
+- Customer analytics: Σ paid per customer over the same periods, cash and card only (`back` is goods,
+  not money), most first. The card shows 8; `top-customers` lists all with sales, deliveries and
+  current debt. (Replaced the „ყველაზე დიდი ვალი“ card — the customer list sorts by debt.)
+- Out of stock: active products with stock ≤ 0; „ყველა“ opens the product list filtered that way.
 
 ## Cash book — „სალარო“ (old `finance`)
 

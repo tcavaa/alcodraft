@@ -7,7 +7,7 @@ import { type Decimal, formatAmount, sum, toDb } from "@/lib/money";
 import { ActionError } from "@/server/action";
 import { audit } from "@/server/audit";
 import type { Tx } from "@/server/db";
-import { applyStockDeltas, lockProducts, nextNumber } from "@/server/db/helpers";
+import { applyStockDeltas, assertProductsAvailable, lockProducts, nextNumber } from "@/server/db/helpers";
 import { stockReceiptItems, stockReceipts, suppliers } from "@/server/db/schema";
 
 import type { Actor } from "../sales/service";
@@ -42,6 +42,7 @@ export async function createReceipt(
     actor.storeId,
     lines.map((l) => l.productId),
   );
+  assertProductsAvailable(lines, productsById, "არააქტიური ან სანაგვეში მყოფი პროდუქტი");
   const number = await nextNumber(tx, actor.storeId, "receipt");
   const [receipt] = await tx
     .insert(stockReceipts)

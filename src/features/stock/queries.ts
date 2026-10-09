@@ -139,7 +139,7 @@ export async function listReceiveProducts(storeId: number): Promise<ReceiveProdu
       supplierId: products.supplierId,
     })
     .from(products)
-    .where(and(eq(products.storeId, storeId), eq(products.isArchived, false)))
+    .where(and(eq(products.storeId, storeId), eq(products.isArchived, false), eq(products.isActive, true)))
     .orderBy(asc(products.id));
 }
 

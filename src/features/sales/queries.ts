@@ -184,9 +184,10 @@ export interface ProductOption {
   stockQty: number;
   supplierName: string | null;
   isArchived: boolean;
+  isActive: boolean;
 }
 
-/** Products for the line editors (active ones, plus any extra ids already on the document). */
+/** Products for the line editors (active ones, plus any extra ids already on the document — kept even if inactive or in the trash). */
 export async function listProductOptions(storeId: number, includeIds: number[] = []): Promise<ProductOption[]> {
   const rows = await db
     .select({
@@ -196,13 +197,14 @@ export async function listProductOptions(storeId: number, includeIds: number[] =
       stockQty: products.stockQty,
       supplierName: suppliers.name,
       isArchived: products.isArchived,
+      isActive: products.isActive,
     })
     .from(products)
     .leftJoin(suppliers, eq(suppliers.id, products.supplierId))
     .where(
       and(
         eq(products.storeId, storeId),
-        includeIds.length ? or(eq(products.isArchived, false), inArray(products.id, includeIds)) : eq(products.isArchived, false),
+        or(and(eq(products.isArchived, false), eq(products.isActive, true)), includeIds.length ? inArray(products.id, includeIds) : undefined),
       ),
     )
     .orderBy(asc(products.id));

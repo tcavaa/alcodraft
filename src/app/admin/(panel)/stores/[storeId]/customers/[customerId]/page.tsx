@@ -37,7 +37,7 @@ import { enumParam, idParam, pageParam, param, type SearchParams, sortParam } fr
 import { sortRows } from "@/lib/sort";
 import { requireStore } from "@/server/auth/dal";
 
-export const metadata: Metadata = { title: "კლიენტი" };
+export const metadata: Metadata = { title: "ობიექტი" };
 
 const PAGE_SIZE = 50;
 
@@ -58,7 +58,7 @@ export default async function CustomerPage({
   return (
     <>
       <PageHeader
-        back={{ href: storeHref(store.id, "customers"), label: "კლიენტები" }}
+        back={{ href: storeHref(store.id, "customers"), label: "ობიექტები" }}
         title={
           <span className="flex items-center gap-2">
             <CustomerColorPicker storeId={store.id} customerId={customer.id} color={customer.color} />
@@ -147,7 +147,7 @@ export default async function CustomerPage({
           accent
           label="დარჩენილი ვალი"
           value={<Money value={stats.debt} currency tone="debt" />}
-          hint={dec(stats.debt).lt(0) ? "კლიენტს ზედმეტად აქვს გადახდილი" : undefined}
+          hint={dec(stats.debt).lt(0) ? "ობიექტს ზედმეტად აქვს გადახდილი" : undefined}
         />
         <StatCard label="სულ მიწოდებული" value={<Money value={stats.total} currency />} hint={`${stats.operations} მიწოდება`} />
         <StatCard label="სულ აღებული" value={<Money value={stats.paid} currency />} />

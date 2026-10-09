@@ -44,7 +44,7 @@ months where the old monthly page misread typos.
 | Typo pair in გეალკო თბილისი „ფინანსები“ (ids 2442/2443: 20 000 000 000 005 ₾ out, then in — an attempt to zero a 0.20 float leftover) | left out at the owner's request (`DROPPED_FINANCE_ROWS` in `config.ts`); their −0.20 net goes into the next entry's correction, so balances are unchanged |
 | Text in number fields (`"30 ზაზას ბენზინი"`, `"1072,3"`, `"გასწორება"`) | value PHP 7 used (`scripts/legacy/php.ts`, tested against real PHP 7.4); raw text kept in the row's `legacy` jsonb |
 | Stored debt/balance that doesn't follow the formula (manual DB edits) | difference stored in `adjustment_amount` → every number identical |
-| Rows pointing at deleted products/customers | recreated as archived `[წაშლილი პროდუქტი #id]` / `[წაშლილი კლიენტი #id]` |
+| Rows pointing at deleted products/customers | recreated as archived `[წაშლილი პროდუქტი #id]` / `[წაშლილი ობიექტი #id]` |
 | Item rows of deleted operations/orders (orphans) | not imported, counted in the report |
 | Receipt batches merged by an INT overflow (ids 2147483647…) | split by (id, date, supplier, comment), numbered in insertion order |
 | Receipts saved without any quantity | skipped; their comments listed in the report |

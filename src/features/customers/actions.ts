@@ -77,7 +77,7 @@ export async function setCustomerArchivedAction(storeId: number, customerId: num
       await db.transaction((tx) => setCustomerArchived(tx, actor, customerId, value));
       refresh();
     },
-    archived === true ? "კლიენტი გადავიდა სანაგვეში" : "კლიენტი აღდგა",
+    archived === true ? "ობიექტი გადავიდა სანაგვეში" : "ობიექტი აღდგა",
   );
 }
 

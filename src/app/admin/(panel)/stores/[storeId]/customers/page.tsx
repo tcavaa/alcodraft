@@ -25,7 +25,7 @@ import { enumParam, pageParam, param, sortParam } from "@/lib/search-params";
 import { cn } from "@/lib/utils";
 import { requireStore } from "@/server/auth/dal";
 
-export const metadata: Metadata = { title: "კლიენტები" };
+export const metadata: Metadata = { title: "ობიექტები" };
 
 const PAGE_SIZE = 100;
 
@@ -49,13 +49,13 @@ export default async function CustomersPage({ params, searchParams }: PageProps<
     <>
       <PageHeader
         eyebrow={store.name}
-        title="კლიენტები"
+        title="ობიექტები"
         description="მაღაზიები, რესტორნები და კომპანიები, რომლებსაც აწვდით პროდუქციას."
         actions={
           <Button asChild>
             <Link href={storeHref(store.id, "customers/new")}>
               <Plus />
-              ახალი კლიენტი
+              ახალი ობიექტი
             </Link>
           </Button>
         }
@@ -81,7 +81,7 @@ export default async function CustomersPage({ params, searchParams }: PageProps<
       {list.rows.length === 0 ? (
         <EmptyState
           icon={Users}
-          title={q ? "ვერაფერი მოიძებნა" : archived ? "სანაგვე ცარიელია" : "კლიენტები ჯერ არ არის"}
+          title={q ? "ვერაფერი მოიძებნა" : archived ? "სანაგვე ცარიელია" : "ობიექტები ჯერ არ არის"}
           description={q ? `"${q}" — სხვა სიტყვით სცადეთ.` : undefined}
         />
       ) : (
@@ -156,7 +156,7 @@ export default async function CustomersPage({ params, searchParams }: PageProps<
               <TableRow className="hover:bg-transparent">
                 <TableCell colSpan={2} />
                 <TableCell colSpan={2} className="text-muted-foreground">
-                  სულ {formatQty(list.total)} კლიენტი
+                  სულ {formatQty(list.total)} ობიექტი
                   {!dec(list.credit).isZero() ? (
                     <>
                       {" "}

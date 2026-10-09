@@ -79,7 +79,7 @@ export function DebtAdjustmentDialog({
         <DialogHeader>
           <DialogTitle>ვალის კორექტირება</DialogTitle>
           <DialogDescription>
-            ჩაიწერება კლიენტის ისტორიაში ცალკე ხაზად. სალარო და საწყობი არ იცვლება.
+            ჩაიწერება ობიექტის ისტორიაში ცალკე ხაზად. სალარო და საწყობი არ იცვლება.
           </DialogDescription>
         </DialogHeader>
         <FieldGroup>

@@ -101,7 +101,7 @@ The order form warns (doesn't block) when a quantity exceeds stock — stock may
 - **Difference:** the old page cut every receipt total and payment to whole lari (`(int)` cast). The new
   one is exact; the import report lists suppliers where this changes the remaining amount.
 
-## Customers — „კლიენტები“ (old `company`)
+## Customers — „ობიექტები“ (old `company`)
 
 - Current debt = sum over all operations (= the old latest `darchenili`).
 - List totals: store 1's old page summed debts including negatives, stores 2–6 counted only positive

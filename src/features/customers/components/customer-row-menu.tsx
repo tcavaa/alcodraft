@@ -46,11 +46,11 @@ export function CustomerRowMenu({
       archive: () => setCustomerArchivedAction(storeId, customerId, true),
       restore: () => setCustomerArchivedAction(storeId, customerId, false),
       archiveDescription:
-        "კლიენტი გაქრება სიიდან, მაგრამ ისტორია და ვალი შენარჩუნდება. ნებისმიერ დროს შეგიძლიათ აღადგინოთ.",
+        "ობიექტი გაქრება სიიდან, მაგრამ ისტორია და ვალი შენარჩუნდება. ნებისმიერ დროს შეგიძლიათ აღადგინოთ.",
       remove: canDelete
         ? {
             run: () => deleteCustomerAction(storeId, customerId),
-            description: "წაიშლება მხოლოდ თუ კლიენტს არცერთი ოპერაცია ან შეკვეთა არ აქვს.",
+            description: "წაიშლება მხოლოდ თუ ობიექტს არცერთი ოპერაცია ან შეკვეთა არ აქვს.",
           }
         : undefined,
     }),

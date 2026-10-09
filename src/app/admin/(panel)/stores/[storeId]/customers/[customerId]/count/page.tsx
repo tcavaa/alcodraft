@@ -37,7 +37,7 @@ export default async function CustomerCountPage({ params }: PageProps<"/admin/st
         }
       />
       {shelf.products.length === 0 ? (
-        <EmptyState icon={ClipboardCheck} title="კლიენტს პროდუქცია ჯერ არ მიეწოდა" />
+        <EmptyState icon={ClipboardCheck} title="ობიექტს პროდუქცია ჯერ არ მიეწოდა" />
       ) : (
         <CountForm
           storeId={store.id}

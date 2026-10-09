@@ -56,7 +56,7 @@ export default async function OrdersPage({ params, searchParams }: PageProps<"/a
         }
       />
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <SearchInput className="sm:w-72" placeholder="კლიენტი, მისამართი, კომენტარი ან №…" />
+        <SearchInput className="sm:w-72" placeholder="ობიექტი, მისამართი, კომენტარი ან №…" />
         <FilterTabs
           pathname={pathname}
           searchParams={sp}

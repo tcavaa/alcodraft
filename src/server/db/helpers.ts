@@ -63,7 +63,7 @@ export async function requireCustomerInStore(dbx: DbOrTx, storeId: number, custo
     .from(customers)
     .where(and(eq(customers.id, customerId), eq(customers.storeId, storeId)))
     .limit(1);
-  if (!row) throw new ActionError("კლიენტი ვერ მოიძებნა.");
+  if (!row) throw new ActionError("ობიექტი ვერ მოიძებნა.");
   return row;
 }
 

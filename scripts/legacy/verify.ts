@@ -379,7 +379,7 @@ async function writeReport(checks: Check[], notes: ImportNotes, counts: Record<s
     );
   if (notes.placeholderCustomers.length)
     lines.push(
-      `- **${notes.placeholderCustomers.length} deleted customer(s)** still referenced by operations were recreated as archived "[წაშლილი კლიენტი #id]".`,
+      `- **${notes.placeholderCustomers.length} deleted customer(s)** still referenced by operations were recreated as archived "[წაშლილი ობიექტი #id]".`,
     );
   for (const o of notes.orphanDeliveryItems)
     lines.push(

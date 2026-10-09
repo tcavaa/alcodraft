@@ -79,7 +79,7 @@ export async function deleteStore(tx: Tx, actorId: number, storeId: number) {
   const checks = [
     { table: deliveries, column: deliveries.storeId, label: "ოპერაციები" },
     { table: orders, column: orders.storeId, label: "შეკვეთები" },
-    { table: customers, column: customers.storeId, label: "კლიენტები" },
+    { table: customers, column: customers.storeId, label: "ობიექტები" },
     { table: products, column: products.storeId, label: "პროდუქცია" },
     { table: suppliers, column: suppliers.storeId, label: "მომწოდებლები" },
     { table: stockReceipts, column: stockReceipts.storeId, label: "მიღებები" },

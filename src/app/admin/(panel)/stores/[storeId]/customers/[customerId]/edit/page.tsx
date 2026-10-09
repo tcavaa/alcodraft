@@ -9,7 +9,7 @@ import { storeHref } from "@/lib/routes";
 import { idParam } from "@/lib/search-params";
 import { requireStore } from "@/server/auth/dal";
 
-export const metadata: Metadata = { title: "კლიენტის რედაქტირება" };
+export const metadata: Metadata = { title: "ობიექტის რედაქტირება" };
 
 export default async function EditCustomerPage({ params }: PageProps<"/admin/stores/[storeId]/customers/[customerId]/edit">) {
   const { storeId, customerId } = await params;

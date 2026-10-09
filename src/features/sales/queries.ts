@@ -388,7 +388,7 @@ export interface CustomerFilterOption {
 }
 
 /**
- * Customers for the "კლიენტი" filter: only those that have operations (or orders / open orders)
+ * Customers for the "ობიექტი" filter: only those that have operations (or orders / open orders)
  * in the given stores, active ones first.
  */
 export async function listCustomerFilterOptions(

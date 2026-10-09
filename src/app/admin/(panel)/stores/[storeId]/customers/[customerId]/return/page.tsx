@@ -31,10 +31,10 @@ export default async function CustomerReturnPage({ params }: PageProps<"/admin/s
         back={{ href: back, label: customer.name }}
         eyebrow={`${store.name} · ${formatDate(todayIso())}`}
         title={`პროდუქციის გამოტანა — ${customer.name}`}
-        description="მხოლოდ კლიენტთან შეტანილი პროდუქცია. ფასი — ბოლოს მიწოდებული ფასი (შეგიძლიათ შეცვალოთ)."
+        description="მხოლოდ ობიექტთან შეტანილი პროდუქცია. ფასი — ბოლოს მიწოდებული ფასი (შეგიძლიათ შეცვალოთ)."
       />
       {delivered.length === 0 ? (
-        <EmptyState icon={PackageMinus} title="კლიენტს პროდუქცია ჯერ არ მიეწოდა" />
+        <EmptyState icon={PackageMinus} title="ობიექტს პროდუქცია ჯერ არ მიეწოდა" />
       ) : (
         <ReturnForm
           storeId={store.id}

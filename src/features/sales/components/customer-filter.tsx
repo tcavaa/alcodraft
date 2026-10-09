@@ -2,7 +2,7 @@ import { ParamCombobox } from "@/components/data/param-combobox";
 
 import type { CustomerFilterOption } from "../queries";
 
-/** "კლიენტი" filter of the operation and order lists (`?customer=<id>`). */
+/** "ობიექტი" filter of the operation and order lists (`?customer=<id>`). */
 export function CustomerFilter({
   options,
   value,
@@ -19,9 +19,9 @@ export function CustomerFilter({
     <ParamCombobox
       param="customer"
       value={value ? String(value) : undefined}
-      label="კლიენტი"
-      placeholder="კლიენტის ძებნა…"
-      emptyText="კლიენტი ვერ მოიძებნა."
+      label="ობიექტი"
+      placeholder="ობიექტის ძებნა…"
+      emptyText="ობიექტი ვერ მოიძებნა."
       className={className}
       options={options.map((c) => ({
         value: String(c.id),

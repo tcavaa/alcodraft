@@ -97,7 +97,7 @@ export function DeleteStoreButton({ storeId, name }: { storeId: number; name: st
         </Button>
       }
       title={`${name} — წაშლა?`}
-      description="წაიშლება მხოლოდ ცარიელი მაღაზია (კლიენტების, პროდუქციის, ოპერაციების და ჩანაწერების გარეშე). სხვა შემთხვევაში დაარქივეთ."
+      description="წაიშლება მხოლოდ ცარიელი მაღაზია (ობიექტების, პროდუქციის, ოპერაციების და ჩანაწერების გარეშე). სხვა შემთხვევაში დაარქივეთ."
       confirmLabel="წაშლა"
       destructive
       action={() => deleteStoreAction(storeId)}

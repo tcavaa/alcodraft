@@ -82,7 +82,7 @@ export function OperationForm({
 
   const validate = () => {
     const next: Record<string, string> = {};
-    if (!customer) next.customerId = "აირჩიეთ კლიენტი";
+    if (!customer) next.customerId = "აირჩიეთ ობიექტი";
     const badLine = firstInvalidLine(products, lineOf);
     if (badLine) next._form = `შეასწორეთ ველები: ${badLine.name}`;
     if (summary.paid !== "" && !parseAmount(summary.paid)) next.paidAmount = "არასწორი თანხა";

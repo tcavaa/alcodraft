@@ -28,14 +28,14 @@ export async function NewDocumentPage({
       <PageHeader
         back={
           initialCustomerId
-            ? { href: storeHref(store.id, `customers/${initialCustomerId}`), label: "კლიენტი" }
+            ? { href: storeHref(store.id, `customers/${initialCustomerId}`), label: "ობიექტი" }
             : { href: storeHref(store.id, list), label: kind === "delivery" ? "ოპერაციები" : "შეკვეთები" }
         }
         eyebrow={`${store.name} · ${formatDate(todayIso())}`}
         title={kind === "delivery" ? "ახალი ოპერაცია" : "ახალი შეკვეთა"}
         description={
           kind === "delivery"
-            ? "შეიყვანეთ შეტანილი და საჩუქარი; ბოლოს — აღებული თანხა. ნაშთი ითვლება კლიენტის გვერდიდან — „განაშთვა“."
+            ? "შეიყვანეთ შეტანილი და საჩუქარი; ბოლოს — აღებული თანხა. ნაშთი ითვლება ობიექტის გვერდიდან — „განაშთვა“."
             : "მარაგი და სალარო შეიცვლება მხოლოდ შეკვეთის დასრულებისას."
         }
       />

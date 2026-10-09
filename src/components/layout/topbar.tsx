@@ -21,7 +21,7 @@ export function Topbar() {
         onClick={openCommandPalette}
       >
         <Search className="size-4" />
-        <span className="truncate">ძებნა — კლიენტი, პროდუქტი, გვერდი…</span>
+        <span className="truncate">ძებნა — ობიექტი, პროდუქტი, გვერდი…</span>
         <Kbd className="ml-auto hidden sm:inline-flex">⌘K</Kbd>
       </Button>
     </header>

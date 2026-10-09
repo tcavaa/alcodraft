@@ -43,7 +43,7 @@ export function CustomerPicker({
               </span>
             </span>
           ) : (
-            <span className="text-muted-foreground">აირჩიეთ კლიენტი…</span>
+            <span className="text-muted-foreground">აირჩიეთ ობიექტი…</span>
           )}
           <ChevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
         </Button>
@@ -52,7 +52,7 @@ export function CustomerPicker({
         <Command>
           <CommandInput placeholder="ძებნა: სახელი, მისამართი, ტელეფონი…" />
           <CommandList className="max-h-80">
-            <CommandEmpty>კლიენტი ვერ მოიძებნა.</CommandEmpty>
+            <CommandEmpty>ობიექტი ვერ მოიძებნა.</CommandEmpty>
             <CommandGroup>
               {customers.map((c) => (
                 <CommandItem

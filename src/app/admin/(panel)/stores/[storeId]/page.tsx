@@ -109,7 +109,7 @@ export default async function StoreDashboardPage({ params, searchParams }: PageP
           }
         />
         <StatCard
-          label="მისაღები (კლიენტების ვალი)"
+          label="მისაღები (ობიექტების ვალი)"
           icon={HandCoins}
           value={<Money value={kpis.receivable} currency tone="debt" />}
           hint={
@@ -202,7 +202,7 @@ export default async function StoreDashboardPage({ params, searchParams }: PageP
             <div>
               <CardTitle className="flex items-center gap-2">
                 <HandCoins className="size-4 text-gold-strong" />
-                კლიენტები — ანალიტიკა
+                ობიექტები — ანალიტიკა
               </CardTitle>
               <CardDescription>ვისგან მივიღეთ ყველაზე მეტი თანხა</CardDescription>
             </div>

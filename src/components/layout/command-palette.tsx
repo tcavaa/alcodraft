@@ -23,7 +23,7 @@ import { GLOBAL_NAV, STORE_NAV, storeHref } from "./nav";
 
 const HIT_ICON = { customer: UserRound, product: Boxes, supplier: Truck } as const;
 const HIT_PATH = { customer: "customers", product: "products", supplier: "suppliers" } as const;
-const HIT_GROUP = { customer: "კლიენტები", product: "პროდუქცია", supplier: "მომწოდებლები" } as const;
+const HIT_GROUP = { customer: "ობიექტები", product: "პროდუქცია", supplier: "მომწოდებლები" } as const;
 
 export function CommandPalette() {
   const router = useRouter();
@@ -76,10 +76,10 @@ export function CommandPalette() {
     .filter((g) => g.items.length);
 
   return (
-    <CommandDialog open={open} onOpenChange={setOpen} title="ძებნა" description="იპოვეთ კლიენტი, პროდუქტი ან გვერდი">
+    <CommandDialog open={open} onOpenChange={setOpen} title="ძებნა" description="იპოვეთ ობიექტი, პროდუქტი ან გვერდი">
       <Command shouldFilter={false}>
       <CommandInput
-        placeholder={storeId ? "კლიენტი, პროდუქტი, მომწოდებელი ან გვერდი…" : "გვერდის ძებნა…"}
+        placeholder={storeId ? "ობიექტი, პროდუქტი, მომწოდებელი ან გვერდი…" : "გვერდის ძებნა…"}
         value={query}
         onValueChange={setQuery}
       />

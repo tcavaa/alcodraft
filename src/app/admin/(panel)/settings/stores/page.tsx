@@ -34,7 +34,7 @@ export default async function StoresAdminPage({ searchParams }: PageProps<"/admi
       <PageHeader
         eyebrow="ადმინისტრირება"
         title="მაღაზიები"
-        description="ყოველ მაღაზიას აქვს ყველა ფუნქცია: პროდუქცია, კლიენტები, ოპერაციები, შეკვეთები, საწყობი, სალარო, ხელფასები."
+        description="ყოველ მაღაზიას აქვს ყველა ფუნქცია: პროდუქცია, ობიექტები, ოპერაციები, შეკვეთები, საწყობი, სალარო, ხელფასები."
         actions={
           <Button asChild>
             <Link href="/admin/settings/stores/new">
@@ -53,7 +53,7 @@ export default async function StoresAdminPage({ searchParams }: PageProps<"/admi
                 მომხმარებელი
               </SortableHead>
               <SortableHead column="customers" className="hidden text-right md:table-cell">
-                კლიენტი
+                ობიექტი
               </SortableHead>
               <SortableHead column="products" className="hidden text-right md:table-cell">
                 პროდუქტი

@@ -45,7 +45,7 @@ export const STORE_NAV: NavGroup[] = [
     items: [
       { title: "ოპერაციები", segment: "operations", icon: ReceiptText },
       { title: "შეკვეთები", segment: "orders", icon: ClipboardList },
-      { title: "კლიენტები", segment: "customers", icon: Users },
+      { title: "ობიექტები", segment: "customers", icon: Users },
     ],
   },
   {

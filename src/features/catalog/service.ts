@@ -297,7 +297,7 @@ async function lockCustomer(tx: Tx, actor: Actor, customerId: number) {
     .from(customers)
     .where(and(eq(customers.id, customerId), eq(customers.storeId, actor.storeId)))
     .for("update");
-  if (!row) throw new ActionError("კლიენტი ვერ მოიძებნა.");
+  if (!row) throw new ActionError("ობიექტი ვერ მოიძებნა.");
   return row;
 }
 
@@ -312,7 +312,7 @@ export async function createCustomer(tx: Tx, actor: Actor, input: CustomerInput)
     action: "customer.create",
     entityType: "customer",
     entityId: row.id,
-    summary: `ახალი კლიენტი: ${input.name}`,
+    summary: `ახალი ობიექტი: ${input.name}`,
   });
   return row;
 }
@@ -376,7 +376,7 @@ export async function deleteCustomer(tx: Tx, actor: Actor, customerId: number) {
     .where(eq(deliveries.customerId, customerId))
     .limit(1);
   const [hasOrders] = await tx.select({ id: orders.id }).from(orders).where(eq(orders.customerId, customerId)).limit(1);
-  if (hasDeliveries || hasOrders) throw new ActionError("კლიენტს აქვს ოპერაციები — გადაიტანეთ სანაგვეში.");
+  if (hasDeliveries || hasOrders) throw new ActionError("ობიექტს აქვს ოპერაციები — გადაიტანეთ სანაგვეში.");
   await tx.delete(customers).where(eq(customers.id, customerId));
   await audit(tx, {
     storeId: actor.storeId,
@@ -384,6 +384,6 @@ export async function deleteCustomer(tx: Tx, actor: Actor, customerId: number) {
     action: "customer.delete",
     entityType: "customer",
     entityId: customerId,
-    summary: `წაიშალა კლიენტი: ${customer.name}`,
+    summary: `წაიშალა ობიექტი: ${customer.name}`,
   });
 }

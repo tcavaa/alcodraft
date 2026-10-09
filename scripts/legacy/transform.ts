@@ -341,7 +341,7 @@ export async function buildImport(legacy: Legacy): Promise<{ data: ImportData; n
       data.customers.push({
         id,
         storeId,
-        name: `[წაშლილი კლიენტი #${legacyId}]`,
+        name: `[წაშლილი ობიექტი #${legacyId}]`,
         isArchived: true,
         legacyId,
       });

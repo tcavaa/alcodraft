@@ -203,7 +203,7 @@ async function insertDelivery(tx: Tx, actor: Actor, args: InsertDeliveryArgs) {
 /** New operation from the "დღის ჩახურვა" form. */
 export async function createDelivery(tx: Tx, actor: Actor, input: DeliveryInput) {
   const customer = await requireCustomerInStore(tx, actor.storeId, input.customerId);
-  if (customer.isArchived) throw new ActionError("კლიენტი სანაგვეშია — ჯერ აღადგინეთ.");
+  if (customer.isArchived) throw new ActionError("ობიექტი სანაგვეშია — ჯერ აღადგინეთ.");
   const lines = computeLines(input.lines, input.discountFactor);
   if (lines.length === 0 && input.paidAmount.isZero()) {
     throw new ActionError("შეიყვანეთ რაოდენობა ან აღებული თანხა.");
@@ -473,7 +473,7 @@ export async function createCustomerCount(
   input: { customerId: number; lines: CountLine[]; comment: string },
 ) {
   const customer = await requireCustomerInStore(tx, actor.storeId, input.customerId);
-  if (customer.isArchived) throw new ActionError("კლიენტი სანაგვეშია — ჯერ აღადგინეთ.");
+  if (customer.isArchived) throw new ActionError("ობიექტი სანაგვეშია — ჯერ აღადგინეთ.");
   assertUniqueProducts(input.lines);
   if (input.lines.some((l) => l.leftoverQty < 0)) throw new ActionError("ნაშთი არ შეიძლება იყოს უარყოფითი.");
   const lines = input.lines.filter((l) => l.leftoverQty > 0);
@@ -548,7 +548,7 @@ export async function createCustomerReturn(
   input: { customerId: number; lines: ReturnLine[]; comment: string },
 ) {
   const customer = await requireCustomerInStore(tx, actor.storeId, input.customerId);
-  if (customer.isArchived) throw new ActionError("კლიენტი სანაგვეშია — ჯერ აღადგინეთ.");
+  if (customer.isArchived) throw new ActionError("ობიექტი სანაგვეშია — ჯერ აღადგინეთ.");
   assertUniqueProducts(input.lines);
   if (input.lines.some((l) => l.quantity < 0 || l.unitPrice.isNegative())) {
     throw new ActionError("რაოდენობა და ფასი არ შეიძლება იყოს უარყოფითი.");
@@ -578,7 +578,7 @@ export async function createCustomerReturn(
   const over = lines.filter((l) => l.quantity > Math.max(left.get(l.productId) ?? 0, 0));
   if (over.length) {
     throw new ActionError(
-      `გამოტანა აღემატება კლიენტთან შეტანილს: ${over
+      `გამოტანა აღემატება ობიექტთან შეტანილს: ${over
         .map((l) => `${productsById.get(l.productId)!.name} (შეტანილია ${Math.max(left.get(l.productId) ?? 0, 0)})`)
         .join("; ")}`,
     );
@@ -660,7 +660,7 @@ export interface OrderInput extends DeliveryInput {
 
 export async function createOrder(tx: Tx, actor: Actor, input: OrderInput) {
   const customer = await requireCustomerInStore(tx, actor.storeId, input.customerId);
-  if (customer.isArchived) throw new ActionError("კლიენტი სანაგვეშია — ჯერ აღადგინეთ.");
+  if (customer.isArchived) throw new ActionError("ობიექტი სანაგვეშია — ჯერ აღადგინეთ.");
   const lines = computeLines(input.lines, input.discountFactor);
   if (lines.length === 0) throw new ActionError("შეკვეთაში არცერთი პროდუქტი არ არის.");
   const productsById = await lockProducts(tx, actor.storeId, lines.map((l) => l.productId));

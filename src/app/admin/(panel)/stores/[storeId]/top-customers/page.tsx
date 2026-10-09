@@ -20,7 +20,7 @@ import { enumParam, sortParam } from "@/lib/search-params";
 import { sortRows } from "@/lib/sort";
 import { requireStore } from "@/server/auth/dal";
 
-export const metadata: Metadata = { title: "კლიენტები — ანალიტიკა" };
+export const metadata: Metadata = { title: "ობიექტები — ანალიტიკა" };
 
 const SORTS = ["rank", "name", "received", "sales", "operations", "debt"] as const;
 
@@ -50,7 +50,7 @@ export default async function TopCustomersPage({ params, searchParams }: PagePro
       <PageHeader
         back={{ href: storeHref(store.id), label: "დაფა" }}
         eyebrow={store.name}
-        title="კლიენტები — ანალიტიკა"
+        title="ობიექტები — ანალიტიკა"
         description={`${periodInfo.description} (${formatDate(topPeriodStart(today, period))} — ${formatDate(today)}): აღებული თანხა (ნაღდი და ბარათი), ყველაზე მეტიდან.`}
       />
 
@@ -74,7 +74,7 @@ export default async function TopCustomersPage({ params, searchParams }: PagePro
                 <SortableHead column="rank" className="w-14">
                   #
                 </SortableHead>
-                <SortableHead column="name">კლიენტი</SortableHead>
+                <SortableHead column="name">ობიექტი</SortableHead>
                 <SortableHead column="received" className="text-right">
                   აღებული თანხა
                 </SortableHead>
@@ -130,7 +130,7 @@ export default async function TopCustomersPage({ params, searchParams }: PagePro
             <TableFooter>
               <TableRow className="hover:bg-transparent">
                 <TableCell />
-                <TableCell className="text-muted-foreground">სულ {formatQty(list.length)} კლიენტი</TableCell>
+                <TableCell className="text-muted-foreground">სულ {formatQty(list.length)} ობიექტი</TableCell>
                 <TableCell className="text-right font-semibold">
                   <Money value={totalReceived} currency />
                 </TableCell>

@@ -69,7 +69,7 @@ export default async function OperationsPage({ params, searchParams }: PageProps
       />
 
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <SearchInput className="sm:w-72" placeholder="კლიენტი, კომენტარი ან №…" />
+        <SearchInput className="sm:w-72" placeholder="ობიექტი, კომენტარი ან №…" />
         <DateRangeFilter />
         <div className="flex flex-wrap gap-2">
           <CustomerFilter options={customerOptions} value={customerId} className="w-64" />

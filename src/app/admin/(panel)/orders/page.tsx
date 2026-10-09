@@ -37,7 +37,7 @@ export default async function AllOrdersPage({ searchParams }: PageProps<"/admin/
     <>
       <PageHeader title="ყველა შეკვეთა" description="ყველა მაღაზიის ღია შეკვეთები ერთ სიაში." />
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <SearchInput className="sm:w-72" placeholder="კლიენტი, მისამართი, კომენტარი ან №…" />
+        <SearchInput className="sm:w-72" placeholder="ობიექტი, მისამართი, კომენტარი ან №…" />
         <CustomerFilter options={customerOptions} value={customerId} className="w-72 sm:ml-auto" withStore />
       </div>
       {list.rows.length === 0 ? (

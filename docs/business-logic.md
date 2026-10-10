@@ -121,6 +121,8 @@ The order form warns (doesn't block) when a quantity exceeds stock — stock may
 - Price history „შეცვლის ისტორია“: old app saved the previous prices on **every** edit; now only when a
   price actually changes, and the new prices are saved too.
 - Inventory correction „ინვენტარიზაცია“ (new): set the real count with a reason → `stock_adjustments`.
+  „ინვენტარიზაციის ისტორია“ (products page) lists every correction of the store: product, ± quantity,
+  stock before → after, reason, who and when.
   Refused when the stock changed after the dialog opened (a receipt or sale meanwhile), so a count
   can't silently wipe that movement.
 - Hard delete (super admin) only for products that never appeared anywhere; suppliers only without
@@ -133,7 +135,10 @@ The order form warns (doesn't block) when a quantity exceeds stock — stock may
 
 ## Dashboard — „დაფა“
 
-- Best sellers: Σ delivered („შეტანილი“, gifts not ranked) per product over the last 30 days /
+- Overview (`/admin`): each user can hide stores from their own overview (`users.hidden_store_ids`);
+  hidden stores are listed below with „ჩვენება“ and stay fully accessible.
+
+- Best sellers: Σ delivered („შეტანილი“, gifts not ranked; a product only given as gifts is listed last) per product over the last 30 days /
   6 months / 1 year (today included), active products only. The card shows 8; `top-products` lists all.
 - Customer analytics: Σ paid per customer over the same periods, cash and card only (`back` is goods,
   not money), most first. The card shows 8; `top-customers` lists all with sales, deliveries and
@@ -143,7 +148,8 @@ The order form warns (doesn't block) when a quantity exceeds stock — stock may
 ## Cash book — „სალარო“ (old `finance`)
 
 - Balance after an entry = previous balance − expense („ხარჯი“) + income („შემოსავალი“).
-- Manual entries: expense and/or income + comment (old `finance/add`).
+- Manual entries: expense and/or income + comment (old `finance/add`). Entries can't be deleted from
+  the app (owner's decision, Oct 2026) — only their text is editable.
 - The old list hid rows where both amounts were 0; those rows are not imported/created (they never
   changed a balance).
 - Monthly report „თვის ბრუნვა“: per month Σ expense, Σ income, income − expense.

@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, desc, eq, ilike, lte, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, lte, or, sql, type SQL } from "drizzle-orm";
 
 import { db } from "@/server/db";
 import { countByArchived } from "@/server/db/archived";
@@ -134,4 +134,54 @@ export async function listSupplierOptions(storeId: number) {
     .from(suppliers)
     .where(eq(suppliers.storeId, storeId))
     .orderBy(asc(suppliers.isArchived), asc(suppliers.name));
+}
+
+/**
+ * „ინვენტარიზაციის ისტორია“ (new): every stock correction of the store, newest first, with the
+ * product, ± quantity, stock before/after, reason and who made it. Dates are Tbilisi dates.
+ */
+export async function listStockAdjustments(
+  storeId: number,
+  p: { q?: string; from?: string; to?: string; page: number; pageSize: number },
+) {
+  const day = sql<string>`(${stockAdjustments.createdAt} at time zone 'Asia/Tbilisi')::date`;
+  const conditions: (SQL | undefined)[] = [eq(stockAdjustments.storeId, storeId)];
+  if (p.q) {
+    const like = likePattern(p.q);
+    conditions.push(or(ilike(products.name, like), ilike(stockAdjustments.reason, like)));
+  }
+  if (p.from) conditions.push(sql`${day} >= ${p.from}`);
+  if (p.to) conditions.push(sql`${day} <= ${p.to}`);
+  const where = and(...conditions);
+  const [rows, [totals]] = await Promise.all([
+    db
+      .select({
+        id: stockAdjustments.id,
+        createdAt: stockAdjustments.createdAt,
+        productId: products.id,
+        productName: products.name,
+        delta: stockAdjustments.quantityDelta,
+        stockBefore: stockAdjustments.stockBefore,
+        reason: stockAdjustments.reason,
+        by: users.name,
+        byEmail: users.email,
+      })
+      .from(stockAdjustments)
+      .innerJoin(products, eq(products.id, stockAdjustments.productId))
+      .leftJoin(users, eq(users.id, stockAdjustments.createdById))
+      .where(where)
+      .orderBy(desc(stockAdjustments.id))
+      .limit(p.pageSize)
+      .offset((p.page - 1) * p.pageSize),
+    db
+      .select({
+        count: sql<number>`count(*)::int`,
+        added: sql<number>`coalesce(sum(${stockAdjustments.quantityDelta}) filter (where ${stockAdjustments.quantityDelta} > 0), 0)::int`,
+        removed: sql<number>`coalesce(sum(${stockAdjustments.quantityDelta}) filter (where ${stockAdjustments.quantityDelta} < 0), 0)::int`,
+      })
+      .from(stockAdjustments)
+      .innerJoin(products, eq(products.id, stockAdjustments.productId))
+      .where(where),
+  ]);
+  return { rows, ...totals };
 }

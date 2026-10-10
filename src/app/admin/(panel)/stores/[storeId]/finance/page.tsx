@@ -184,10 +184,6 @@ export default async function FinancePage({ params, searchParams }: PageProps<"/
                       entryId={e.id}
                       description={e.description}
                       note={e.note}
-                      adjustment={e.adjustment}
-                      hasAmounts={!dec(e.amountIn).isZero() || !dec(e.amountOut).isZero()}
-                      canDelete={user.role === "super_admin"}
-                      locked={Boolean(e.deliveryId)}
                     />
                   </TableCell>
                 </TableRow>

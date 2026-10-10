@@ -1,6 +1,6 @@
 "use client";
 
-import { Banknote, HandCoins, Pencil, Plus, Trash2 } from "lucide-react";
+import { Banknote, HandCoins, Pencil, Plus } from "lucide-react";
 import { useState } from "react";
 
 import { AmountNoteForm } from "@/components/forms/amount-note-form";
@@ -25,13 +25,12 @@ import { useActionForm } from "@/hooks/use-action-form";
 import { useRequestId } from "@/hooks/use-request-id";
 import { useServerAction } from "@/hooks/use-server-action";
 import type { ActionResult } from "@/lib/action-result";
-import { dec, formatAmount, formatMoney, parseAmount } from "@/lib/money";
+import { dec, formatMoney, parseAmount } from "@/lib/money";
 import { storeHref } from "@/lib/routes";
 
 import {
   accrueWageAction,
   createEntryAction,
-  deleteEntryAction,
   payWageAction,
   renameAccountAction,
   setEmployeeArchivedAction,
@@ -133,22 +132,11 @@ export function EntryRowMenu({
   entryId,
   description,
   note,
-  adjustment,
-  hasAmounts,
-  canDelete,
-  locked,
 }: {
   storeId: number;
   entryId: number;
   description: string;
   note: string;
-  /** Old manual balance correction carried by this (imported) entry. */
-  adjustment: string;
-  /** Has an expense or income (a correction-only row has neither). */
-  hasAmounts: boolean;
-  canDelete: boolean;
-  /** Belongs to an operation — change it there. */
-  locked: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [desc, setDesc] = useState(description);
@@ -160,27 +148,10 @@ export function EntryRowMenu({
     setN(note);
     setEditing(true);
   };
+  // Cash entries can't be deleted from the app (owner's decision) — only their text is editable.
   const items: RowMenuItem[] = [
     { type: "action", label: "კომენტარის შეცვლა", icon: <Pencil />, run: async () => openEditor() },
   ];
-  if (canDelete && !locked) {
-    items.push({ type: "separator" });
-    items.push({
-      type: "action",
-      label: "წაშლა",
-      icon: <Trash2 />,
-      destructive: true,
-      run: () => deleteEntryAction(storeId, entryId, hasAmounts ? "entry" : "correction"),
-      confirm: {
-        title: "ჩანაწერის წაშლა?",
-        description:
-          hasAmounts && !dec(adjustment).isZero()
-            ? `ჩანაწერს აქვს ძველი სისტემის კორექტირება (${formatAmount(adjustment)} ₾) — ის დარჩება ცალკე ხაზად, რომ შემდეგი ბალანსები არ შეიცვალოს. ხარჯი/შემოსავალი წაიშლება.`
-            : "ბალანსი ამ და შემდეგი ჩანაწერებისთვის გადაითვლება. ხელფასის გადახდის წაშლა თანამშრომელს ვალს აღუდგენს.",
-        confirmLabel: "წაშლა",
-      },
-    });
-  }
   const save = () =>
     run(() => updateEntryTextAction(storeId, entryId, { description: desc, note: n }), {
       onSuccess: () => setEditing(false),

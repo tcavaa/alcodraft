@@ -148,7 +148,7 @@ export async function getOutOfStock(storeId: number, limit = 8) {
 
 /**
  * Best sellers by units delivered („შეტანილი“) in the period, most first; gifts are shown but not
- * ranked. No `limit` = every product sold in the period.
+ * ranked (a product only given as gifts is listed last, with 0 delivered). No `limit` = every product sold in the period.
  */
 export async function getTopProducts(storeId: number, today: string, period: TopPeriod, limit?: number) {
   const quantity = sql<number>`sum(${deliveryItems.quantity})::int`;
@@ -174,7 +174,8 @@ export async function getTopProducts(storeId: number, today: string, period: Top
       ),
     )
     .groupBy(products.id)
-    .having(sql`sum(${deliveryItems.quantity}) > 0`)
+    // Products only given as gifts in the period count too (their gifts would go missing otherwise).
+    .having(sql`sum(${deliveryItems.quantity}) > 0 or sum(${deliveryItems.giftQty}) > 0`)
     .orderBy(desc(quantity), asc(products.name))
     .$dynamic();
   return limit ? query.limit(limit) : query;

@@ -8,7 +8,7 @@ import { z } from "zod";
 import { MAX_ID } from "@/lib/policy";
 import { checkbox, email, formObject, id, password, requiredText } from "@/lib/validation";
 import { ActionError, type ActionResult, parseInput, runAction } from "@/server/action";
-import { authorizeSuperAdmin, requireUser } from "@/server/auth/dal";
+import { authorizeSuperAdmin, getMyStores, requireUser } from "@/server/auth/dal";
 import { verifyPassword } from "@/server/auth/password";
 import { currentSessionId } from "@/server/auth/session";
 import { db } from "@/server/db";
@@ -21,6 +21,7 @@ import {
   deleteStore,
   deleteUser,
   resetUserPassword,
+  setStoreHidden,
   updateOwnName,
   updateStore,
   updateUser,
@@ -148,4 +149,19 @@ export async function updateOwnNameAction(name: string) {
     await db.transaction((tx) => updateOwnName(tx, me.id, value));
     refresh();
   }, "სახელი შენახულია");
+}
+
+/** Overview page: hide a store from my own overview, or show it again. */
+export async function setStoreHiddenAction(storeId: number, hidden: boolean) {
+  return runAction(
+    async () => {
+      const me = await requireUser();
+      const value = parseInput(z.boolean(), hidden);
+      const store = (await getMyStores()).find((s) => s.id === storeId);
+      if (!store) throw new ActionError("ამ მაღაზიაზე წვდომა არ გაქვთ.");
+      await db.transaction((tx) => setStoreHidden(tx, me.id, store.id, value));
+      refresh();
+    },
+    hidden ? "მაღაზია დაიმალა" : "მაღაზია ისევ ჩანს",
+  );
 }

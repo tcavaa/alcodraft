@@ -57,6 +57,13 @@
       "when": 1791575790626,
       "tag": "0007_customer_returns_supplier",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1791640899754,
+      "tag": "0008_hidden_stores",
+      "breakpoints": true
     }
   ]
 }

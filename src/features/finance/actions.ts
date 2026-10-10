@@ -15,7 +15,6 @@ import {
   accrueWage,
   createEmployee,
   createEntry,
-  deleteEntry,
   payWage,
   renameAccount,
   setEmployeeArchived,
@@ -54,15 +53,6 @@ export async function updateEntryTextAction(storeId: number, entryId: number, in
     await db.transaction((tx) => updateEntryText(tx, actor, entryId, data));
     refresh();
   }, "შენახულია");
-}
-
-export async function deleteEntryAction(storeId: number, entryId: number, expected: "entry" | "correction") {
-  return runAction(async () => {
-    const { actor } = await authorizeStore(storeId, { superAdminOnly: true });
-    const state = parseInput(z.enum(["entry", "correction"]), expected);
-    await db.transaction((tx) => deleteEntry(tx, actor, entryId, state));
-    refresh();
-  }, "ჩანაწერი წაიშალა");
 }
 
 const accountName = requiredText("დასახელება", 100);

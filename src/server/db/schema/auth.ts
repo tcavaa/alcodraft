@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   bigint,
   boolean,
@@ -42,6 +43,8 @@ export const users = app
     isActive: boolean().notNull().default(true),
     lastLoginAt: timestamp({ withTimezone: true, mode: "date" }),
     passwordChangedAt: timestamp({ withTimezone: true, mode: "date" }),
+    /** Stores this user hid from their overview page (new); hidden stores stay fully accessible. */
+    hiddenStoreIds: integer().array().notNull().default(sql`'{}'::integer[]`),
     ...timestamps(),
   })
   .enableRLS();

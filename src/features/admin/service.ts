@@ -250,3 +250,20 @@ export async function updateOwnName(tx: Tx, userId: number, name: string) {
     summary: `სახელი: ${user.name || "—"} → ${name || "—"}`,
   });
 }
+
+/** Hides a store from (or shows it again on) the user's own overview page. Access is unchanged. */
+export async function setStoreHidden(tx: Tx, userId: number, storeId: number, hidden: boolean) {
+  const user = await lockUser(tx, userId);
+  const has = user.hiddenStoreIds.includes(storeId);
+  if (has === hidden) return;
+  const next = hidden ? [...user.hiddenStoreIds, storeId] : user.hiddenStoreIds.filter((id) => id !== storeId);
+  await tx.update(users).set({ hiddenStoreIds: next }).where(eq(users.id, userId));
+  await audit(tx, {
+    storeId,
+    userId,
+    action: hidden ? "user.hide_store" : "user.show_store",
+    entityType: "user",
+    entityId: userId,
+    summary: hidden ? "მაღაზია დაიმალა მიმოხილვიდან" : "მაღაზია ისევ ჩანს მიმოხილვაში",
+  });
+}

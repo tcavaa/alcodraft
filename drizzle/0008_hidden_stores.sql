@@ -1,0 +1,1 @@
+ALTER TABLE "app"."users" ADD COLUMN "hidden_store_ids" integer[] DEFAULT '{}'::integer[] NOT NULL;

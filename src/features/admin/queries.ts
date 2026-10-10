@@ -150,3 +150,9 @@ export async function listAudit(p: {
 export async function listUserOptions() {
   return db.select({ id: users.id, email: users.email, name: users.name }).from(users).orderBy(asc(users.email));
 }
+
+/** Stores the user hid from their overview page. */
+export async function getHiddenStoreIds(userId: number): Promise<number[]> {
+  const [row] = await db.select({ ids: users.hiddenStoreIds }).from(users).where(eq(users.id, userId));
+  return row?.ids ?? [];
+}

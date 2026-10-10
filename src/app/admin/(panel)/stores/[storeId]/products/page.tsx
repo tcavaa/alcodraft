@@ -1,4 +1,4 @@
-import { Boxes, PackageOpen, Plus } from "lucide-react";
+import { Boxes, ClipboardList, PackageOpen, Plus } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -63,6 +63,12 @@ export default async function ProductsPage({ params, searchParams }: PageProps<"
         description="ფასები, შემოტანის ფასები და მარაგი საწყობში."
         actions={
           <>
+            <Button variant="outline" asChild>
+              <Link href={storeHref(store.id, "products/inventory")}>
+                <ClipboardList />
+                ინვენტარიზაციის ისტორია
+              </Link>
+            </Button>
             <Button variant="outline" asChild>
               <Link href={storeHref(store.id, "stock")}>
                 <PackageOpen />

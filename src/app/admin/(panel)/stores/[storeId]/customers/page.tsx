@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { ArchivedTabs } from "@/components/data/archived-tabs";
-import { Pagination } from "@/components/data/pagination";
 import { ParamSelect } from "@/components/data/param-select";
 import { SearchInput } from "@/components/data/search-input";
 import { SortableHead } from "@/components/data/sortable-head";
@@ -21,13 +20,11 @@ import { countCustomers, CUSTOMER_SORTS, listCustomers } from "@/features/custom
 import { formatDate } from "@/lib/dates";
 import { dec, formatQty } from "@/lib/money";
 import { storeHref } from "@/lib/routes";
-import { enumParam, pageParam, param, sortParam } from "@/lib/search-params";
+import { enumParam, param, sortParam } from "@/lib/search-params";
 import { cn } from "@/lib/utils";
 import { requireStore } from "@/server/auth/dal";
 
 export const metadata: Metadata = { title: "ობიექტები" };
-
-const PAGE_SIZE = 100;
 
 export default async function CustomersPage({ params, searchParams }: PageProps<"/admin/stores/[storeId]/customers">) {
   const { storeId } = await params;
@@ -36,11 +33,10 @@ export default async function CustomersPage({ params, searchParams }: PageProps<
   const archived = param(sp, "archived") === "1";
   const sort = sortParam(sp, CUSTOMER_SORTS);
   const color = enumParam(sp, "color", CUSTOMER_COLORS);
-  const page = pageParam(sp);
   const q = param(sp, "q");
 
   const [list, counts] = await Promise.all([
-    listCustomers(store.id, { q, archived, sort, color, page, pageSize: PAGE_SIZE }),
+    listCustomers(store.id, { q, archived, sort, color }),
     countCustomers(store.id),
   ]);
   const pathname = storeHref(store.id, "customers");
@@ -173,7 +169,6 @@ export default async function CustomersPage({ params, searchParams }: PageProps<
           </Table>
         </TableCard>
       )}
-      <Pagination page={page} pageSize={PAGE_SIZE} total={list.total} pathname={pathname} searchParams={sp} />
     </>
   );
 }

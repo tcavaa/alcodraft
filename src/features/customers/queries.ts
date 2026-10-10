@@ -47,12 +47,10 @@ export interface CustomerListParams {
   /** null = by colour, then name (default). */
   sort: SortState<CustomerSort> | null;
   color?: CustomerColor;
-  page: number;
-  pageSize: number;
 }
 
 
-/** Customers with their current debt (old company/index, without the N+1 queries). */
+/** Customers with their current debt (old company/index, without the N+1 queries) — all on one page. */
 export async function listCustomers(storeId: number, p: CustomerListParams) {
   const stats = db
     .select({
@@ -121,9 +119,7 @@ export async function listCustomers(storeId: number, p: CustomerListParams) {
       .from(customers)
       .leftJoin(stats, eq(stats.customerId, customers.id))
       .where(where)
-      .orderBy(...order)
-      .limit(p.pageSize)
-      .offset((p.page - 1) * p.pageSize),
+      .orderBy(...order),
     db
       .select({
         total: count(),

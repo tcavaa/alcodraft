@@ -118,8 +118,9 @@ export default async function CustomersPage({ params, searchParams }: PageProps<
                       <Link href={storeHref(store.id, `customers/${c.id}`)} className="block truncate font-medium hover:underline" title={c.name}>
                         {c.name}
                       </Link>
-                      <div className="text-xs text-muted-foreground">
-                        {c.address ? <span className="mr-3">{c.address}</span> : null}
+                      {/* Wraps inside the name column (cells are nowrap) so it never runs into the comment. */}
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-xs whitespace-normal text-muted-foreground">
+                        {c.address ? <span>{c.address}</span> : null}
                         <PhoneLinks {...customerPhones(c)} compact empty={c.address ? null : "—"} />
                       </div>
                       {/* The comment column shows from lg; below it the comment sits under the name. */}

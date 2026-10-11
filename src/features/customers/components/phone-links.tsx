@@ -21,14 +21,15 @@ export function PhoneLinks({
   /** Old free text that isn't a number, shown as is. */
   rest?: string;
   className?: string;
-  /** One-line list rows: smaller, no icon. */
+  /** List rows: smaller, no icon, laid out by the parent (a wrapping flex row). */
   compact?: boolean;
   /** Shown when there is nothing to show. */
   empty?: React.ReactNode;
 }) {
   if (phones.length === 0 && !rest) return empty;
   return (
-    <span className={cn("inline-flex flex-wrap items-center gap-x-3 gap-y-1", className)}>
+    // Compact: the numbers become items of the parent's wrapping flex row (customer list).
+    <span className={cn(compact ? "contents" : "inline-flex flex-wrap items-center gap-x-3 gap-y-1", className)}>
       {phones.map((p, i) => (
         <PhoneLink key={i} phone={p} compact={compact} />
       ))}

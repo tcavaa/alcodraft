@@ -1,4 +1,4 @@
-import { Archive, ClipboardCheck, ClipboardList, IdCard, MapPin, PackageMinus, Pencil, Phone, Plus, UserRound } from "lucide-react";
+import { Archive, ClipboardCheck, ClipboardList, IdCard, MapPin, PackageMinus, Pencil, Plus } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -21,6 +21,8 @@ import { CustomerColorPicker } from "@/features/customers/components/customer-co
 import { CustomerComment } from "@/features/customers/components/customer-comment";
 import { CustomerRowMenu } from "@/features/customers/components/customer-row-menu";
 import { DebtAdjustmentDialog } from "@/features/customers/components/debt-adjustment-dialog";
+import { PhoneLinks } from "@/features/customers/components/phone-links";
+import { customerPhones } from "@/features/customers/phones";
 import {
   CUSTOMER_OPERATION_SORTS,
   getCustomer,
@@ -72,16 +74,7 @@ export default async function CustomerPage({
         }
         description={
           <span className="flex flex-wrap gap-x-4 gap-y-1">
-            {customer.phone ? (
-              <span className="inline-flex items-center gap-1">
-                <Phone className="size-3.5" /> {customer.phone}
-              </span>
-            ) : null}
-            {customer.contactPerson ? (
-              <span className="inline-flex items-center gap-1">
-                <UserRound className="size-3.5" /> {customer.contactPerson}
-              </span>
-            ) : null}
+            <PhoneLinks {...customerPhones(customer)} />
             {customer.taxId ? (
               <span className="inline-flex items-center gap-1">
                 <IdCard className="size-3.5" /> {customer.taxId}

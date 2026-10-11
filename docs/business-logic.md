@@ -114,6 +114,11 @@ The order form warns (doesn't block) when a quantity exceeds stock — stock may
   (Old page also counted item rows of deleted operations and of operations later moved to another
   customer — see the import report.)
 - Archive („სანაგვე“) keeps history; hard delete only for customers without operations/orders.
+- Phones (new, `phones` jsonb): any number of „სახელი + ნომერი“ rows; the number is the 9 local digits,
+  +995 is fixed. `phone` / `contact_person` keep the numbers / names joined (search, one-line summaries).
+  Customers not edited since keep the old free text: their numbers are read from it for display and
+  pre-filled on the edit form (`parseLegacyPhone`; anything unreadable is shown, not dropped), and
+  saving the form converts them. Clicking a number opens „დარეკვა“ (`tel:+995…`) / „კოპირება“.
 
 ## Products — „პროდუქცია“ (old `drinks`)
 
@@ -132,6 +137,8 @@ The order form warns (doesn't block) when a quantity exceeds stock — stock may
   services for new lines, and left out of the dashboard statistics (best sellers, out of stock).
   Saved operations and orders keep it — an open order with it can still be edited and completed.
   The trash („სანაგვე“) hides a product the same way and also from the main list.
+- Category (new, `category`): „ჩამოსასხმელი“ (`draft`) or „შუშა“ (`bottle`); null for products made
+  before categories („კატეგორიის გარეშე“) until someone picks one. Filter „კატეგორია“ on the list.
 
 ## Dashboard — „დაფა“
 
@@ -140,6 +147,10 @@ The order form warns (doesn't block) when a quantity exceeds stock — stock may
 
 - Best sellers: Σ delivered („შეტანილი“, gifts not ranked; a product only given as gifts is listed last) per product over the last 30 days /
   6 months / 1 year (today included), active products only. The card shows 8; `top-products` lists all.
+  Both show units and money per category plus „სულ“; `top-products?category=` ranks within one category.
+- Monthly chart: sales and money collected per month, last 12 months; hover (mouse) or tap (touch) a
+  month for its numbers. „ყველა“ → `monthly-sales`: every month since the store's first operation,
+  with per-year subtotals.
 - Customer analytics: Σ paid per customer over the same periods, cash and card only (`back` is goods,
   not money), most first. The card shows 8; `top-customers` lists all with sales, deliveries and
   current debt. (Replaced the „ყველაზე დიდი ვალი“ card — the customer list sorts by debt.)

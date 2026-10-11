@@ -19,6 +19,8 @@ import {
   updateProduct,
 } from "../catalog/service";
 
+import { PRODUCT_CATEGORIES } from "./categories";
+
 const productSchema = z.object({
   name: requiredText("დასახელება"),
   supplierId: z
@@ -29,6 +31,11 @@ const productSchema = z.object({
   salePrice: amount({ required: true }),
   purchasePrice: amount(),
   comment: text(2000),
+  category: z
+    .string()
+    .optional()
+    .transform((v) => (v && v !== "none" ? v : null))
+    .pipe(z.enum(PRODUCT_CATEGORIES, "აირჩიეთ კატეგორია").nullable()),
 });
 
 export async function createProductAction(storeId: number, _prev: unknown, formData: FormData): Promise<ActionResult> {

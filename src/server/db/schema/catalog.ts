@@ -1,6 +1,8 @@
-import { boolean, date, index, integer, text, uniqueIndex } from "drizzle-orm/pg-core";
+import { boolean, date, index, integer, jsonb, text, uniqueIndex } from "drizzle-orm/pg-core";
 
-import { app, createdAt, customerColor, id, money, timestamps } from "./_shared";
+import type { CustomerPhone } from "@/features/customers/phones";
+
+import { app, createdAt, customerColor, id, money, productCategory, timestamps } from "./_shared";
 import { stores, users } from "./auth";
 
 /** Old: `momwodebeli`. */
@@ -48,6 +50,8 @@ export const products = app
       purchasePrice: money().notNull().default("0"),
       stockQty: integer().notNull().default(0),
       comment: text().notNull().default(""),
+      /** ჩამოსასხმელი / შუშა (new); null = not set yet (products made before categories). */
+      category: productCategory(),
       /**
        * Inactive (new): stays in the product list but can't be put on a new operation, order or
        * receipt and is left out of the dashboard statistics. Saved documents keep it. Trash
@@ -101,10 +105,15 @@ export const customers = app
       address: text().notNull().default(""),
       /** Old `ident` (საიდენტიფიკაციო ნომერი). */
       taxId: text().notNull().default(""),
-      /** Old `number`. */
+      /**
+       * Old `number`. Since the phone list: the numbers of `phones` joined ("557994849, 599…") for
+       * search; before it, free text (see `customerPhones`).
+       */
       phone: text().notNull().default(""),
-      /** Old `contact` (საკონტაქტო პირი). */
+      /** Old `contact` (საკონტაქტო პირი). Since the phone list: the names of `phones` joined. */
       contactPerson: text().notNull().default(""),
+      /** Phone numbers with a name each (new); empty = not edited since, read `phone` instead. */
+      phones: jsonb().$type<CustomerPhone[]>().notNull().default([]),
       comment: text().notNull().default(""),
       color: customerColor(),
       isArchived: boolean().notNull().default(false),

@@ -10,12 +10,14 @@ import { Money } from "@/components/money";
 import { PageHeader } from "@/components/page-header";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { getTopProducts } from "@/features/dashboard/queries";
+import { CategoryTotals } from "@/features/dashboard/category-totals";
 import { RankBadge } from "@/features/dashboard/rank-badge";
+import { categoryTotals, PRODUCT_CATEGORIES, PRODUCT_CATEGORY_LABEL } from "@/features/products/categories";
 import { TOP_PERIOD_VALUES, TOP_PERIODS, topPeriodStart } from "@/features/dashboard/top-periods";
 import { formatDate, todayIso } from "@/lib/dates";
 import { dec, formatQty, sum } from "@/lib/money";
 import { storeHref } from "@/lib/routes";
-import { enumParam, sortParam } from "@/lib/search-params";
+import { enumParam, hrefWith, sortParam } from "@/lib/search-params";
 import { sortRows } from "@/lib/sort";
 import { cn } from "@/lib/utils";
 import { requireStore } from "@/server/auth/dal";
@@ -31,7 +33,11 @@ export default async function TopProductsPage({ params, searchParams }: PageProp
   const sp = await searchParams;
   const period = enumParam(sp, "period", TOP_PERIOD_VALUES) ?? "30d";
   const today = todayIso();
-  const list = await getTopProducts(store.id, today, period);
+  const category = enumParam(sp, "category", [...PRODUCT_CATEGORIES, "none"] as const);
+  const all = await getTopProducts(store.id, today, period);
+  const totals = categoryTotals(all);
+  // Ranked within the chosen category.
+  const list = category ? all.filter((p) => (p.category ?? "none") === category) : all;
   const ranked = list.map((p, i) => ({ ...p, rank: i + 1 }));
   const rows = sortRows(ranked, sortParam(sp, SORTS), {
     rank: (p) => p.rank,
@@ -55,7 +61,7 @@ export default async function TopProductsPage({ params, searchParams }: PageProp
         description={`${periodInfo.description} (${formatDate(topPeriodStart(today, period))} — ${formatDate(today)}), შეტანილი რაოდენობით.`}
       />
 
-      <div className="mb-3">
+      <div className="mb-3 flex flex-wrap gap-2">
         <FilterTabs
           pathname={storeHref(store.id, "top-products")}
           searchParams={sp}
@@ -63,7 +69,27 @@ export default async function TopProductsPage({ params, searchParams }: PageProp
           value={period}
           options={TOP_PERIODS.map((p) => ({ value: p.value, label: p.label }))}
         />
+        <FilterTabs
+          pathname={storeHref(store.id, "top-products")}
+          searchParams={sp}
+          param="category"
+          value={category ?? "all"}
+          options={[
+            { value: "all", label: "ყველა" },
+            ...totals.groups.map((g) => ({ value: g.key, label: g.label, count: formatQty(g.count) })),
+          ]}
+        />
       </div>
+
+      {all.length > 0 ? (
+        <div className="mb-4">
+          <CategoryTotals
+            totals={totals}
+            active={category ?? null}
+            hrefFor={(key) => hrefWith(storeHref(store.id, "top-products"), sp, { category: key })}
+          />
+        </div>
+      ) : null}
 
       {rows.length === 0 ? (
         <EmptyState icon={Trophy} title="ამ პერიოდში გაყიდვა არ ყოფილა" />
@@ -101,6 +127,9 @@ export default async function TopProductsPage({ params, searchParams }: PageProp
                     <Link href={storeHref(store.id, `products/${p.id}`)} className="font-medium hover:underline">
                       {p.name}
                     </Link>
+                    {p.category && !category ? (
+                      <span className="ml-2 text-xs text-muted-foreground">{PRODUCT_CATEGORY_LABEL[p.category]}</span>
+                    ) : null}
                   </TableCell>
                   <TableCell className="text-right font-medium tabular-nums">{formatQty(p.quantity)}</TableCell>
                   <TableCell className="hidden text-right text-muted-foreground tabular-nums md:table-cell">

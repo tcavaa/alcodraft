@@ -24,6 +24,8 @@ import {
 } from "@/server/db/schema";
 
 import { CUSTOMER_COLOR_LABEL, type CustomerColor } from "../customers/colors";
+import type { CustomerPhone } from "../customers/phones";
+import { PRODUCT_CATEGORY_LABEL, type ProductCategory } from "../products/categories";
 import type { Actor } from "../sales/service";
 
 // ── Products (old "drinks") ─────────────────────────────────────────────────
@@ -34,6 +36,7 @@ export interface ProductInput {
   salePrice: Decimal;
   purchasePrice: Decimal;
   comment: string;
+  category: ProductCategory | null;
 }
 
 async function assertSupplier(tx: Tx, storeId: number, supplierId: number | null) {
@@ -56,6 +59,7 @@ export async function createProduct(tx: Tx, actor: Actor, input: ProductInput) {
       salePrice: toDb(input.salePrice),
       purchasePrice: toDb(input.purchasePrice),
       comment: input.comment,
+      category: input.category,
       stockQty: 0,
     })
     .returning({ id: products.id });
@@ -95,6 +99,7 @@ export async function updateProduct(tx: Tx, actor: Actor, productId: number, inp
       salePrice: toDb(input.salePrice),
       purchasePrice: toDb(input.purchasePrice),
       comment: input.comment,
+      category: input.category,
     })
     .where(eq(products.id, productId));
   await audit(tx, {
@@ -105,7 +110,9 @@ export async function updateProduct(tx: Tx, actor: Actor, productId: number, inp
     entityId: productId,
     summary: priceChanged
       ? `${input.name}: ფასი ${formatAmount(product.salePrice)} → ${formatAmount(input.salePrice)}, შემოტანის ${formatAmount(product.purchasePrice)} → ${formatAmount(input.purchasePrice)}`
-      : `${input.name}: მონაცემები განახლდა`,
+      : product.category !== input.category
+        ? `${input.name}: კატეგორია — ${input.category ? PRODUCT_CATEGORY_LABEL[input.category] : "არცერთი"}`
+        : `${input.name}: მონაცემები განახლდა`,
   });
 }
 
@@ -287,8 +294,16 @@ export interface CustomerInput {
   name: string;
   address: string;
   taxId: string;
-  phone: string;
-  contactPerson: string;
+  phones: CustomerPhone[];
+}
+
+/** `phone` / `contactPerson` keep the list joined, for search and the one-line summaries. */
+function customerValues(input: CustomerInput) {
+  return {
+    ...input,
+    phone: input.phones.map((p) => p.number).filter(Boolean).join(", "),
+    contactPerson: input.phones.map((p) => p.name).filter(Boolean).join(", "),
+  };
 }
 
 async function lockCustomer(tx: Tx, actor: Actor, customerId: number) {
@@ -304,7 +319,7 @@ async function lockCustomer(tx: Tx, actor: Actor, customerId: number) {
 export async function createCustomer(tx: Tx, actor: Actor, input: CustomerInput) {
   const [row] = await tx
     .insert(customers)
-    .values({ storeId: actor.storeId, ...input })
+    .values({ storeId: actor.storeId, ...customerValues(input) })
     .returning({ id: customers.id });
   await audit(tx, {
     storeId: actor.storeId,
@@ -319,7 +334,7 @@ export async function createCustomer(tx: Tx, actor: Actor, input: CustomerInput)
 
 export async function updateCustomer(tx: Tx, actor: Actor, customerId: number, input: CustomerInput) {
   const customer = await lockCustomer(tx, actor, customerId);
-  await tx.update(customers).set(input).where(eq(customers.id, customerId));
+  await tx.update(customers).set(customerValues(input)).where(eq(customers.id, customerId));
   await audit(tx, {
     storeId: actor.storeId,
     userId: actor.userId,

@@ -10,6 +10,13 @@ import { useActionForm } from "@/hooks/use-action-form";
 import type { ActionResult } from "@/lib/action-result";
 import { dec } from "@/lib/money";
 
+import { NO_CATEGORY_LABEL, PRODUCT_CATEGORIES, PRODUCT_CATEGORY_LABEL, type ProductCategory } from "../categories";
+
+const categoryOptions = [
+  ...PRODUCT_CATEGORIES.map((c) => ({ value: c, label: PRODUCT_CATEGORY_LABEL[c] })),
+  { value: "none", label: `— ${NO_CATEGORY_LABEL} —` },
+];
+
 export function ProductForm({
   action,
   suppliers,
@@ -18,7 +25,14 @@ export function ProductForm({
 }: {
   action: (prev: ActionResult | undefined, formData: FormData) => Promise<ActionResult>;
   suppliers: { id: number; name: string; isArchived: boolean }[];
-  defaults?: { name: string; supplierId: number | null; salePrice: string; purchasePrice: string; comment: string };
+  defaults?: {
+    name: string;
+    supplierId: number | null;
+    salePrice: string;
+    purchasePrice: string;
+    comment: string;
+    category: ProductCategory | null;
+  };
   submitLabel: string;
 }) {
   const form = useActionForm(action);
@@ -30,6 +44,8 @@ export function ProductForm({
       .map((s) => ({ value: String(s.id), label: s.name })),
   ];
   const [supplierId, setSupplierId] = useState(defaults?.supplierId ? String(defaults.supplierId) : "none");
+  // A new product starts without a category so it is chosen on purpose.
+  const [category, setCategory] = useState<string>(defaults?.category ?? "none");
 
   return (
     <form onSubmit={form.onSubmit} className="space-y-6">
@@ -42,7 +58,23 @@ export function ProductForm({
           required
           className="sm:col-span-2"
         />
-        <Field data-invalid={Boolean(errors?.supplierId)} className="sm:col-span-2">
+        <Field data-invalid={Boolean(errors?.category)}>
+          <FieldLabel htmlFor="category">კატეგორია</FieldLabel>
+          <Select name="category" value={category} onValueChange={setCategory}>
+            <SelectTrigger id="category" className="w-full">
+              <SelectValue>{categoryOptions.find((o) => o.value === category)?.label}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              {categoryOptions.map((o) => (
+                <SelectItem key={o.value} value={o.value}>
+                  {o.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {errors?.category ? <FieldError>{errors.category}</FieldError> : null}
+        </Field>
+        <Field data-invalid={Boolean(errors?.supplierId)}>
           <FieldLabel htmlFor="supplierId">მომწოდებელი</FieldLabel>
           <Select name="supplierId" value={supplierId} onValueChange={setSupplierId}>
             <SelectTrigger id="supplierId" className="w-full">

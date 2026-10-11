@@ -101,8 +101,8 @@ describe.skipIf(!enabled)("money & stock flows (rolled back)", () => {
     await inRollback(async (tx, { actor, stock, cash, debt, delivery }) => {
       // Catalog + receipt (old drinks/stock): stock grows, receipt keeps stock-before.
       const supplier = await createSupplier(tx, actor, { name: "S", isReturns: false });
-      const p1 = await createProduct(tx, actor, { name: "Wine A", supplierId: supplier.id, salePrice: dec(17), purchasePrice: dec(10), comment: "" });
-      const p2 = await createProduct(tx, actor, { name: "Wine B", supplierId: supplier.id, salePrice: dec(20), purchasePrice: dec(12), comment: "" });
+      const p1 = await createProduct(tx, actor, { name: "Wine A", supplierId: supplier.id, salePrice: dec(17), purchasePrice: dec(10), comment: "", category: null });
+      const p2 = await createProduct(tx, actor, { name: "Wine B", supplierId: supplier.id, salePrice: dec(20), purchasePrice: dec(12), comment: "", category: null });
       await createReceipt(tx, actor, {
         supplierId: supplier.id,
         lines: [
@@ -115,7 +115,7 @@ describe.skipIf(!enabled)("money & stock flows (rolled back)", () => {
       expect(await stock(p2.id)).toBe(5);
 
       // Operation with 15% discount (old distribution/add).
-      const customer = await createCustomer(tx, actor, { name: "C", address: "", taxId: "", phone: "", contactPerson: "" });
+      const customer = await createCustomer(tx, actor, { name: "C", address: "", taxId: "", phones: [] });
       const d1 = await createDelivery(tx, actor, {
         customerId: customer.id,
         lines: [
@@ -206,10 +206,10 @@ describe.skipIf(!enabled)("money & stock flows (rolled back)", () => {
 
   it("edits and deletes of imported operations keep old totals and corrections", async () => {
     await inRollback(async (tx, { store, actor, stock, cash, debt, delivery }) => {
-      const p1 = await createProduct(tx, actor, { name: "A", supplierId: null, salePrice: dec(17), purchasePrice: dec(0), comment: "" });
-      const p2 = await createProduct(tx, actor, { name: "B", supplierId: null, salePrice: dec(20), purchasePrice: dec(0), comment: "" });
-      const p3 = await createProduct(tx, actor, { name: "C", supplierId: null, salePrice: dec(5), purchasePrice: dec(0), comment: "" });
-      const archived = await createProduct(tx, actor, { name: "Old", supplierId: null, salePrice: dec(9), purchasePrice: dec(0), comment: "" });
+      const p1 = await createProduct(tx, actor, { name: "A", supplierId: null, salePrice: dec(17), purchasePrice: dec(0), comment: "", category: null });
+      const p2 = await createProduct(tx, actor, { name: "B", supplierId: null, salePrice: dec(20), purchasePrice: dec(0), comment: "", category: null });
+      const p3 = await createProduct(tx, actor, { name: "C", supplierId: null, salePrice: dec(5), purchasePrice: dec(0), comment: "", category: null });
+      const archived = await createProduct(tx, actor, { name: "Old", supplierId: null, salePrice: dec(9), purchasePrice: dec(0), comment: "", category: null });
       await setProductArchived(tx, actor, archived.id, true);
       await createReceipt(tx, actor, {
         supplierId: null,
@@ -219,7 +219,7 @@ describe.skipIf(!enabled)("money & stock flows (rolled back)", () => {
         ],
         comment: "",
       });
-      const customer = await createCustomer(tx, actor, { name: "Imported", address: "", taxId: "", phone: "", contactPerson: "" });
+      const customer = await createCustomer(tx, actor, { name: "Imported", address: "", taxId: "", phones: [] });
 
       // What the legacy import produces: stored total 500 while the rows add up to 480, a product
       // on two rows, a line total that isn't price × qty, a money-only row, no payment method, no
@@ -364,7 +364,7 @@ describe.skipIf(!enabled)("money & stock flows (rolled back)", () => {
 
   it("books a resubmitted create once", async () => {
     await inRollback(async (tx, { user, actor }) => {
-      const customer = await createCustomer(tx, actor, { name: "Twice", address: "", taxId: "", phone: "", contactPerson: "" });
+      const customer = await createCustomer(tx, actor, { name: "Twice", address: "", taxId: "", phones: [] });
       const input = {
         customerId: customer.id,
         lines: [],
@@ -405,7 +405,7 @@ describe.skipIf(!enabled)("money & stock flows (rolled back)", () => {
       expect(await balance()).toBe("250");
 
       // Inventory count against a stale screen is refused.
-      const p = await createProduct(tx, actor, { name: "P", supplierId: null, salePrice: dec(10), purchasePrice: dec(0), comment: "" });
+      const p = await createProduct(tx, actor, { name: "P", supplierId: null, salePrice: dec(10), purchasePrice: dec(0), comment: "", category: null });
       await createReceipt(tx, actor, { supplierId: null, lines: [{ productId: p.id, quantity: 50, unitCost: dec(1) }], comment: "" });
       await failsInSavepoint(tx, (inner) => adjustProductStock(inner, actor, p.id, { newQty: 8, expectedQty: 0, reason: "count" }));
       await adjustProductStock(tx, actor, p.id, { newQty: 48, expectedQty: 50, reason: "count" });
@@ -417,7 +417,7 @@ describe.skipIf(!enabled)("money & stock flows (rolled back)", () => {
       await failsInSavepoint(tx, (inner) => deleteSupplier(inner, actor, supplier.id));
 
       // "Complete" saves the changes still on screen first, in the same transaction.
-      const customer = await createCustomer(tx, actor, { name: "O", address: "", taxId: "", phone: "", contactPerson: "" });
+      const customer = await createCustomer(tx, actor, { name: "O", address: "", taxId: "", phones: [] });
       const order = await createOrder(tx, actor, {
         customerId: customer.id,
         lines: [{ productId: p.id, price: "10", quantity: 4, giftQty: 0, leftoverQty: 0 }],
@@ -467,8 +467,8 @@ describe.skipIf(!enabled)("money & stock flows (rolled back)", () => {
 
   it("counts leftovers, takes goods back from a customer and hides inactive products", async () => {
     await inRollback(async (tx, { actor, store, stock, cash, debt, delivery }) => {
-      const p1 = await createProduct(tx, actor, { name: "Wine A", supplierId: null, salePrice: dec(10), purchasePrice: dec(6), comment: "" });
-      const p2 = await createProduct(tx, actor, { name: "Wine B", supplierId: null, salePrice: dec(20), purchasePrice: dec(12), comment: "" });
+      const p1 = await createProduct(tx, actor, { name: "Wine A", supplierId: null, salePrice: dec(10), purchasePrice: dec(6), comment: "", category: null });
+      const p2 = await createProduct(tx, actor, { name: "Wine B", supplierId: null, salePrice: dec(20), purchasePrice: dec(12), comment: "", category: null });
       await createReceipt(tx, actor, {
         supplierId: null,
         lines: [
@@ -477,7 +477,7 @@ describe.skipIf(!enabled)("money & stock flows (rolled back)", () => {
         ],
         comment: "",
       });
-      const customer = await createCustomer(tx, actor, { name: "Shop", address: "", taxId: "", phone: "", contactPerson: "" });
+      const customer = await createCustomer(tx, actor, { name: "Shop", address: "", taxId: "", phones: [] });
       await createDelivery(tx, actor, {
         customerId: customer.id,
         lines: [

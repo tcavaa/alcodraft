@@ -110,6 +110,7 @@ export async function listCustomers(storeId: number, p: CustomerListParams) {
         address: customers.address,
         phone: customers.phone,
         contactPerson: customers.contactPerson,
+        phones: customers.phones,
         taxId: customers.taxId,
         comment: customers.comment,
         color: customers.color,

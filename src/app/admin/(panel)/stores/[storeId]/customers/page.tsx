@@ -16,6 +16,8 @@ import { CUSTOMER_COLOR_LABEL, CUSTOMER_COLORS } from "@/features/customers/colo
 import { COLOR_ROW, CustomerColorPicker } from "@/features/customers/components/customer-color";
 import { CustomerComment } from "@/features/customers/components/customer-comment";
 import { CustomerRowMenu } from "@/features/customers/components/customer-row-menu";
+import { PhoneLinks } from "@/features/customers/components/phone-links";
+import { customerPhones } from "@/features/customers/phones";
 import { countCustomers, CUSTOMER_SORTS, listCustomers } from "@/features/customers/queries";
 import { formatDate } from "@/lib/dates";
 import { dec, formatQty } from "@/lib/money";
@@ -116,8 +118,9 @@ export default async function CustomersPage({ params, searchParams }: PageProps<
                       <Link href={storeHref(store.id, `customers/${c.id}`)} className="block truncate font-medium hover:underline" title={c.name}>
                         {c.name}
                       </Link>
-                      <div className="truncate text-xs text-muted-foreground">
-                        {[c.address, c.phone, c.contactPerson].filter(Boolean).join(" · ") || "—"}
+                      <div className="text-xs text-muted-foreground">
+                        {c.address ? <span className="mr-3">{c.address}</span> : null}
+                        <PhoneLinks {...customerPhones(c)} compact empty={c.address ? null : "—"} />
                       </div>
                       {/* The comment column shows from lg; below it the comment sits under the name. */}
                       {c.comment ? (

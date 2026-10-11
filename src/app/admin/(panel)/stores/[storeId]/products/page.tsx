@@ -13,6 +13,7 @@ import { PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { NO_CATEGORY_LABEL, PRODUCT_CATEGORIES, PRODUCT_CATEGORY_LABEL } from "@/features/products/categories";
 import { ProductRowMenu } from "@/features/products/components/product-row-menu";
 import { countProducts, listProducts, listSupplierOptions } from "@/features/products/queries";
 import { dec, formatQty } from "@/lib/money";
@@ -34,6 +35,7 @@ export default async function ProductsPage({ params, searchParams }: PageProps<"
   const supplierId = intParam(sp, "supplier");
   const status = enumParam(sp, "status", ["active", "inactive"] as const);
   const stock = enumParam(sp, "stock", ["out"] as const);
+  const category = enumParam(sp, "category", [...PRODUCT_CATEGORIES, "none"] as const);
   const [list, counts, suppliers] = await Promise.all([
     listProducts(store.id, {
       q: param(sp, "q"),
@@ -41,6 +43,7 @@ export default async function ProductsPage({ params, searchParams }: PageProps<"
       supplierId,
       active: status ? status === "active" : undefined,
       outOfStock: stock === "out",
+      category,
     }),
     countProducts(store.id),
     listSupplierOptions(store.id),
@@ -105,6 +108,17 @@ export default async function ProductsPage({ params, searchParams }: PageProps<"
             />
           )}
           <ParamSelect
+            param="category"
+            value={category ?? "all"}
+            label="კატეგორია"
+            className="w-48"
+            options={[
+              { value: "all", label: "ყველა" },
+              ...PRODUCT_CATEGORIES.map((c) => ({ value: c, label: PRODUCT_CATEGORY_LABEL[c] })),
+              { value: "none", label: NO_CATEGORY_LABEL },
+            ]}
+          />
+          <ParamSelect
             param="stock"
             value={stock ?? "all"}
             label="მარაგი"
@@ -156,6 +170,11 @@ export default async function ProductsPage({ params, searchParams }: PageProps<"
                     {!p.isActive ? (
                       <Badge variant="outline" className="ml-2 align-middle text-[0.7rem]">
                         არააქტიური
+                      </Badge>
+                    ) : null}
+                    {p.category ? (
+                      <Badge variant="secondary" className="ml-2 align-middle text-[0.7rem]">
+                        {PRODUCT_CATEGORY_LABEL[p.category]}
                       </Badge>
                     ) : null}
                     {p.supplierName ? <div className="text-xs text-muted-foreground">{p.supplierName}</div> : null}

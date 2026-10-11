@@ -19,8 +19,9 @@ import { PageHeader } from "@/components/page-header";
 import { StatCard } from "@/components/stat-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { FilterTabs } from "@/components/data/filter-tabs";
+import { CategoryTotals } from "@/features/dashboard/category-totals";
 import { MonthlyBars } from "@/features/dashboard/monthly-bars";
 import { RankBadge } from "@/features/dashboard/rank-badge";
 import {
@@ -32,6 +33,7 @@ import {
   getTopProducts,
 } from "@/features/dashboard/queries";
 import { TOP_PERIOD_VALUES, TOP_PERIODS } from "@/features/dashboard/top-periods";
+import { categoryTotals } from "@/features/products/categories";
 import { OPERATION_KIND_LABEL, operationKind } from "@/features/sales/labels";
 import { formatDate, formatMonth, todayIso } from "@/lib/dates";
 import { formatQty } from "@/lib/money";
@@ -47,14 +49,16 @@ export default async function StoreDashboardPage({ params, searchParams }: PageP
   const topPeriod = enumParam(sp, "top", TOP_PERIOD_VALUES) ?? "30d";
   const clientsPeriod = enumParam(sp, "clients", TOP_PERIOD_VALUES) ?? "30d";
   const today = todayIso();
-  const [kpisMap, monthly, recent, topCustomers, outOfStock, topProducts] = await Promise.all([
+  const [kpisMap, monthly, recent, topCustomers, outOfStock, soldProducts] = await Promise.all([
     getStoreKpis([store.id], today),
     getMonthlySales(store.id, today),
     getRecentDeliveries(store.id),
     getTopCustomers(store.id, today, clientsPeriod, 8),
     getOutOfStock(store.id),
-    getTopProducts(store.id, today, topPeriod, 8),
+    getTopProducts(store.id, today, topPeriod),
   ]);
+  const topProducts = soldProducts.slice(0, 8);
+  const soldTotals = categoryTotals(soldProducts);
   const kpis = kpisMap.get(store.id)!;
   const href = (segment: string) => storeHref(store.id, segment);
   const withPeriod = (path: string, period: string) => `${href(path)}${period === "30d" ? "" : `?period=${period}`}`;
@@ -135,6 +139,13 @@ export default async function StoreDashboardPage({ params, searchParams }: PageP
           <CardHeader>
             <CardTitle>გაყიდვები თვეების მიხედვით</CardTitle>
             <CardDescription>ბოლო 12 თვე — გაყიდვა და აღებული თანხა</CardDescription>
+            <CardAction>
+              <Button variant="ghost" size="sm" asChild>
+                <Link href={href("monthly-sales")}>
+                  ყველა <ArrowRight />
+                </Link>
+              </Button>
+            </CardAction>
           </CardHeader>
           <CardContent>
             <MonthlyBars data={monthly} />
@@ -142,19 +153,19 @@ export default async function StoreDashboardPage({ params, searchParams }: PageP
         </Card>
 
         <Card>
-          <CardHeader className="flex-row items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <Trophy className="size-4 text-gold-strong" />
-                ყველაზე გაყიდვადი პროდუქცია
-              </CardTitle>
-              <CardDescription>შეტანილი რაოდენობით</CardDescription>
-            </div>
-            <Button variant="ghost" size="sm" asChild>
-              <Link href={topHref}>
-                ყველა <ArrowRight />
-              </Link>
-            </Button>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Trophy className="size-4 text-gold-strong" />
+              ყველაზე გაყიდვადი პროდუქცია
+            </CardTitle>
+            <CardDescription>შეტანილი რაოდენობით</CardDescription>
+            <CardAction>
+              <Button variant="ghost" size="sm" asChild>
+                <Link href={topHref}>
+                  ყველა <ArrowRight />
+                </Link>
+              </Button>
+            </CardAction>
           </CardHeader>
           <CardContent className="space-y-1">
             <div className="mb-2">
@@ -166,6 +177,15 @@ export default async function StoreDashboardPage({ params, searchParams }: PageP
                 options={periodTabs}
               />
             </div>
+            {soldProducts.length > 0 ? (
+              <div className="mb-3">
+                <CategoryTotals
+                  totals={soldTotals}
+                  compact
+                  hrefFor={(key) => `${topHref}${key ? `${topHref.includes("?") ? "&" : "?"}category=${key}` : ""}`}
+                />
+              </div>
+            ) : null}
             {topProducts.length === 0 ? (
               <p className="px-2 text-sm text-muted-foreground">ამ პერიოდში გაყიდვა არ ყოფილა.</p>
             ) : (
@@ -198,19 +218,19 @@ export default async function StoreDashboardPage({ params, searchParams }: PageP
 
       <div className="mt-6 grid gap-6 md:grid-cols-2">
         <Card>
-          <CardHeader className="flex-row items-center justify-between">
-            <div>
-              <CardTitle className="flex items-center gap-2">
-                <HandCoins className="size-4 text-gold-strong" />
-                ობიექტები — ანალიტიკა
-              </CardTitle>
-              <CardDescription>ვისგან მივიღეთ ყველაზე მეტი თანხა</CardDescription>
-            </div>
-            <Button variant="ghost" size="sm" asChild>
-              <Link href={clientsHref}>
-                ყველას ნახვა <ArrowRight />
-              </Link>
-            </Button>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <HandCoins className="size-4 text-gold-strong" />
+              ობიექტები — ანალიტიკა
+            </CardTitle>
+            <CardDescription>ვისგან მივიღეთ ყველაზე მეტი თანხა</CardDescription>
+            <CardAction>
+              <Button variant="ghost" size="sm" asChild>
+                <Link href={clientsHref}>
+                  ყველას ნახვა <ArrowRight />
+                </Link>
+              </Button>
+            </CardAction>
           </CardHeader>
           <CardContent className="space-y-1">
             <div className="mb-2">
@@ -266,24 +286,24 @@ export default async function StoreDashboardPage({ params, searchParams }: PageP
       </div>
 
       <Card className="mt-6">
-        <CardHeader className="flex-row items-center justify-between">
-          <div>
-            <CardTitle>ბოლო ოპერაციები</CardTitle>
-            <CardDescription>
-              {kpis.openOrders ? (
-                <Link href={href("orders")} className="hover:underline">
-                  {kpis.openOrders} ღია შეკვეთა ელოდება დასრულებას
-                </Link>
-              ) : (
-                "ღია შეკვეთები არ არის"
-              )}
-            </CardDescription>
-          </div>
-          <Button variant="ghost" size="sm" asChild>
-            <Link href={href("operations")}>
-              ყველა ოპერაცია <ArrowRight />
-            </Link>
-          </Button>
+        <CardHeader>
+          <CardTitle>ბოლო ოპერაციები</CardTitle>
+          <CardDescription>
+            {kpis.openOrders ? (
+              <Link href={href("orders")} className="hover:underline">
+                {kpis.openOrders} ღია შეკვეთა ელოდება დასრულებას
+              </Link>
+            ) : (
+              "ღია შეკვეთები არ არის"
+            )}
+          </CardDescription>
+          <CardAction>
+            <Button variant="ghost" size="sm" asChild>
+              <Link href={href("operations")}>
+                ყველა ოპერაცია <ArrowRight />
+              </Link>
+            </Button>
+          </CardAction>
         </CardHeader>
         <CardContent className="px-0">
           <div className="divide-y">

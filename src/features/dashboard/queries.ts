@@ -114,6 +114,17 @@ export async function getMonthlySales(storeId: number, today: string, months = 1
   });
 }
 
+/** Every month from the store's first operation to the current one (the chart's „ყველა“ page). */
+export async function getAllMonthlySales(storeId: number, today: string) {
+  const [{ first }] = await db
+    .select({ first: sql<string | null>`min(${deliveries.deliveryDate})` })
+    .from(deliveries)
+    .where(eq(deliveries.storeId, storeId));
+  const [y, m] = today.split("-").map(Number);
+  const [fy, fm] = (first ?? today).split("-").map(Number);
+  return getMonthlySales(storeId, today, Math.max(1, (y - fy) * 12 + (m - fm) + 1));
+}
+
 export async function getRecentDeliveries(storeId: number, limit = 8) {
   return db
     .select({
@@ -156,6 +167,7 @@ export async function getTopProducts(storeId: number, today: string, period: Top
     .select({
       id: products.id,
       name: products.name,
+      category: products.category,
       stock: products.stockQty,
       quantity,
       gifts: sql<number>`sum(${deliveryItems.giftQty})::int`,

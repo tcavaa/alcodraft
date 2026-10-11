@@ -32,6 +32,9 @@ export const deliveryKind = app.enum("delivery_kind", ["delivery", "adjustment",
 /** New values are appended (Postgres can add enum values but not reorder them); display order is in `CUSTOMER_COLORS`. */
 export const customerColor = app.enum("customer_color", ["green", "yellow", "red", "blue", "black", "white"]);
 
+/** `draft` = ჩამოსასხმელი, `bottle` = შუშა. */
+export const productCategory = app.enum("product_category", ["draft", "bottle"]);
+
 export const financeEntryKind = app.enum("finance_entry_kind", [
   "manual",
   "delivery",

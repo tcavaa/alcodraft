@@ -134,7 +134,7 @@ The order form warns (doesn't block) when a quantity exceeds stock — stock may
   receipts **and** payments.
 - Active / inactive „არააქტიური“ (new, `is_active`): an inactive product stays in the product list
   (filter „სტატუსი“) but is hidden from the operation, order and receipt forms, refused by those
-  services for new lines, and left out of the dashboard statistics (best sellers, out of stock).
+  services for new lines, and left out of the dashboard statistics (best sellers, „მარაგი იწურება“ — the 8 lowest stocks, sold out first).
   Saved operations and orders keep it — an open order with it can still be edited and completed.
   The trash („სანაგვე“) hides a product the same way and also from the main list.
 - Category (new, `category`): „ჩამოსასხმელი“ (`draft`) or „შუშა“ (`bottle`); null for products made

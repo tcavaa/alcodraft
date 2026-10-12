@@ -26,7 +26,7 @@ import { MonthlyBars } from "@/features/dashboard/monthly-bars";
 import { RankBadge } from "@/features/dashboard/rank-badge";
 import {
   getMonthlySales,
-  getOutOfStock,
+  getLowStock,
   getRecentDeliveries,
   getStoreKpis,
   getTopCustomers,
@@ -38,6 +38,7 @@ import { OPERATION_KIND_LABEL, operationKind } from "@/features/sales/labels";
 import { formatDate, formatMonth, todayIso } from "@/lib/dates";
 import { formatQty } from "@/lib/money";
 import { enumParam } from "@/lib/search-params";
+import { cn } from "@/lib/utils";
 import { requireStore } from "@/server/auth/dal";
 
 export const metadata: Metadata = { title: "დაფა" };
@@ -49,12 +50,12 @@ export default async function StoreDashboardPage({ params, searchParams }: PageP
   const topPeriod = enumParam(sp, "top", TOP_PERIOD_VALUES) ?? "30d";
   const clientsPeriod = enumParam(sp, "clients", TOP_PERIOD_VALUES) ?? "30d";
   const today = todayIso();
-  const [kpisMap, monthly, recent, topCustomers, outOfStock, soldProducts] = await Promise.all([
+  const [kpisMap, monthly, recent, topCustomers, lowStock, soldProducts] = await Promise.all([
     getStoreKpis([store.id], today),
     getMonthlySales(store.id, today),
     getRecentDeliveries(store.id),
     getTopCustomers(store.id, today, clientsPeriod, 8),
-    getOutOfStock(store.id),
+    getLowStock(store.id),
     getTopProducts(store.id, today, topPeriod),
   ]);
   const topProducts = soldProducts.slice(0, 8);
@@ -255,29 +256,34 @@ export default async function StoreDashboardPage({ params, searchParams }: PageP
         </Card>
 
         <Card>
-          <CardHeader className="flex-row items-center justify-between">
+          <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <PackageX className="size-4 text-destructive" />
-              მარაგი ამოწურულია
+              მარაგი იწურება
             </CardTitle>
-            <Button variant="ghost" size="sm" asChild>
-              <Link href={`${href("products")}?status=active&stock=out&sort=stock`}>
-                ყველა <ArrowRight />
-              </Link>
-            </Button>
+            <CardDescription>ყველაზე მცირე მარაგი — ჯერ ამოწურული</CardDescription>
+            <CardAction>
+              <Button variant="ghost" size="sm" asChild>
+                <Link href={`${href("products")}?status=active&sort=stock`}>
+                  ყველა <ArrowRight />
+                </Link>
+              </Button>
+            </CardAction>
           </CardHeader>
           <CardContent className="space-y-1">
-            {outOfStock.length === 0 ? (
-              <p className="text-sm text-muted-foreground">ყველა პროდუქტი მარაგშია.</p>
+            {lowStock.length === 0 ? (
+              <p className="text-sm text-muted-foreground">აქტიური პროდუქცია არ არის.</p>
             ) : (
-              outOfStock.map((p) => (
+              lowStock.map((p) => (
                 <Link
                   key={p.id}
                   href={href(`products/${p.id}`)}
                   className="flex items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-sm hover:bg-muted"
                 >
                   <span className="truncate">{p.name}</span>
-                  <span className="tabular-nums text-destructive">{formatQty(p.stock)}</span>
+                  <span className={cn("tabular-nums", p.stock <= 0 ? "text-destructive" : "font-medium text-gold-strong")}>
+                    {formatQty(p.stock)}
+                  </span>
                 </Link>
               ))
             )}

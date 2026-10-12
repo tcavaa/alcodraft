@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, asc, count, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, count, desc, eq, gte, inArray, sql } from "drizzle-orm";
 
 import { db } from "@/server/db";
 import { cashSumOrZero, debtSum } from "@/server/db/expressions";
@@ -146,13 +146,12 @@ export async function getRecentDeliveries(storeId: number, limit = 8) {
     .limit(limit);
 }
 
-export async function getOutOfStock(storeId: number, limit = 8) {
+/** Lowest stock first: sold out (≤ 0), then the ones running low — active products only. */
+export async function getLowStock(storeId: number, limit = 8) {
   return db
     .select({ id: products.id, name: products.name, stock: products.stockQty })
     .from(products)
-    .where(
-      and(eq(products.storeId, storeId), eq(products.isArchived, false), eq(products.isActive, true), lte(products.stockQty, 0)),
-    )
+    .where(and(eq(products.storeId, storeId), eq(products.isArchived, false), eq(products.isActive, true)))
     .orderBy(asc(products.stockQty), asc(products.name))
     .limit(limit);
 }

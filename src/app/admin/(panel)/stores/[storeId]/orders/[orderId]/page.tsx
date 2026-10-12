@@ -12,6 +12,8 @@ import { PrintButton } from "@/components/print-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { PhoneLinks } from "@/features/customers/components/phone-links";
+import { customerPhones } from "@/features/customers/phones";
 import { DocumentEditForm } from "@/features/sales/components/document-edit-form";
 import { ORDER_STATUS_LABEL, UPLOAD_STATUS_LABEL } from "@/features/sales/labels";
 import { leftoverValue, paymentLabel } from "@/features/sales/logic";
@@ -50,6 +52,9 @@ export default async function OrderPage({ params, searchParams }: PageProps<"/ad
             {customer.name}
           </Link>
           {customer.address ? ` · ${customer.address}` : ""}
+          <div className="mt-1">
+            <PhoneLinks {...customerPhones(customer)} />
+          </div>
         </>
       }
       actions={

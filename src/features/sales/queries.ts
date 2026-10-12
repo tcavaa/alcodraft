@@ -356,6 +356,9 @@ export async function listOrders(storeIds: number[], p: OrderListParams) {
         customerId: customers.id,
         customerName: customers.name,
         customerAddress: customers.address,
+        customerPhone: customers.phone,
+        customerContact: customers.contactPerson,
+        customerPhones: customers.phones,
         currentDebt,
       })
       .from(orders)

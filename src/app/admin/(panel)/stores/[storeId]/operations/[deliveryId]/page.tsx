@@ -15,6 +15,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { PhoneLinks } from "@/features/customers/components/phone-links";
+import { customerPhones } from "@/features/customers/phones";
 import { DeleteOperationButton } from "@/features/sales/components/delete-operation-button";
 import { hasNoPayment, OPERATION_KIND_LABEL, operationKind, UPLOAD_STATUS_LABEL } from "@/features/sales/labels";
 import { leftoverValue, paymentLabel } from "@/features/sales/logic";
@@ -93,6 +95,9 @@ export default async function OperationPage({
               {customer.name}
             </Link>
             {customer.address ? ` · ${customer.address}` : ""}
+            <div className="mt-1">
+              <PhoneLinks {...customerPhones(customer)} />
+            </div>
           </>
         }
         actions={

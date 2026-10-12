@@ -5,6 +5,8 @@ import { HeadRow, TableCard } from "@/components/data/table-card";
 import { Money } from "@/components/money";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableFooter, TableHeader, TableRow } from "@/components/ui/table";
+import { PhoneLinks } from "@/features/customers/components/phone-links";
+import { type CustomerPhone, customerPhones } from "@/features/customers/phones";
 import { formatDate } from "@/lib/dates";
 import { storeHref } from "@/lib/routes";
 import { cn } from "@/lib/utils";
@@ -28,6 +30,9 @@ export interface OrderRow {
   customerId: number;
   customerName: string;
   customerAddress: string;
+  customerPhone: string;
+  customerContact: string;
+  customerPhones: CustomerPhone[];
   currentDebt: string;
 }
 
@@ -95,6 +100,13 @@ export function OrdersTable({
                         {o.customerAddress}
                       </div>
                     ) : null}
+                    {/* Wraps inside the column (cells are nowrap): a number never runs into the next one. */}
+                    <div className="flex flex-wrap gap-x-3 text-xs whitespace-normal text-muted-foreground">
+                      <PhoneLinks
+                        {...customerPhones({ phones: o.customerPhones, phone: o.customerPhone, contactPerson: o.customerContact })}
+                        compact
+                      />
+                    </div>
                     {/* The comment column shows from xl; below it the comment sits under the customer. */}
                     {o.comment ? (
                       <div className="-mx-1.5 mt-0.5 min-w-48 whitespace-normal xl:hidden">
